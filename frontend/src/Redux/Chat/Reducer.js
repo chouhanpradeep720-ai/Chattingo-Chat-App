@@ -1,22 +1,39 @@
-import { CREATE_CHAT, CREATE_GROUP, GET_USERS_CHAT } from "./ActionType";
+import {
+  CREATE_CHAT,
+  CREATE_GROUP,
+  GET_USERS_CHAT,
+} from "./ActionType";
 
-// Initial state for the chat store
 const initialValue = {
-  chats: [], // Holds an array of chat data
-  createdGroup: null, // Holds data related to a created group chat
-  createdChat: null, // Holds data related to a created single chat
+  chats: [],
+  createdGroup: null,
+  createdChat: null,
 };
 
-// Reducer function for handling chat-related actions
-export const chatReducer = (store = initialValue, { type, payload }) => {
-  // Check the action type and update the store accordingly
-  if (type === CREATE_CHAT) {
-    return { ...store, createdChat: payload };
-  } else if (type === CREATE_GROUP) {
-    return { ...store, createdGroup: payload };
-  } else if (type === GET_USERS_CHAT) {
-    return { ...store, chats: payload };
+export const chatReducer = (
+  store = initialValue,
+  { type, payload }
+) => {
+  switch (type) {
+    case CREATE_CHAT:
+      return {
+        ...store,
+        createdChat: payload,
+      };
+
+    case CREATE_GROUP:
+      return {
+        ...store,
+        createdGroup: payload,
+      };
+
+    case GET_USERS_CHAT:
+      return {
+        ...store,
+        chats: Array.isArray(payload) ? payload : [],
+      };
+
+    default:
+      return store;
   }
-  // If the action type is not recognized, return the current store unchanged
-  return store;
 };

@@ -1,7 +1,7 @@
 import { BASE_API_URL } from "../../config/api";
 import { CREATE_CHAT, CREATE_GROUP, GET_USERS_CHAT } from "./ActionType";
 
-// Action creator for creating a single chat
+// Create a single chat
 export const createChat = (chatData) => async (dispatch) => {
   try {
     const res = await fetch(`${BASE_API_URL}/api/chats/single`, {
@@ -13,17 +13,28 @@ export const createChat = (chatData) => async (dispatch) => {
       body: JSON.stringify(chatData.data),
     });
 
-    const data = await res.json();
-    console.log("create chat ", data);
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(errorText || "Failed to create chat");
+    }
 
-    // Dispatch an action with the created chat data
-    dispatch({ type: CREATE_CHAT, payload: data });
+    const data = await res.json();
+
+    console.log("Single chat created successfully:", data);
+
+    dispatch({
+      type: CREATE_CHAT,
+      payload: data,
+    });
+
+    return data;
   } catch (error) {
-    console.log("catch error ", error);
+    console.error("Create chat error:", error);
+    return null;
   }
 };
 
-// Action creator for creating a group chat
+// Create a group chat
 export const createGroupChat = (chatData) => async (dispatch) => {
   try {
     const res = await fetch(`${BASE_API_URL}/api/chats/group`, {
@@ -35,17 +46,28 @@ export const createGroupChat = (chatData) => async (dispatch) => {
       body: JSON.stringify(chatData.group),
     });
 
-    const data = await res.json();
-    console.log("create group chat ", data);
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(errorText || "Failed to create group chat");
+    }
 
-    // Dispatch an action with the created group chat data
-    dispatch({ type: CREATE_GROUP, payload: data });
+    const data = await res.json();
+
+    console.log("Group chat created successfully:", data);
+
+    dispatch({
+      type: CREATE_GROUP,
+      payload: data,
+    });
+
+    return data;
   } catch (error) {
-    console.log("catch error ", error);
+    console.error("Create group chat error:", error);
+    return null;
   }
 };
 
-// Action creator for getting users in a chat
+// Get all chats of the logged-in user
 export const getUsersChat = (chatData) => async (dispatch) => {
   try {
     const res = await fetch(`${BASE_API_URL}/api/chats/user`, {
@@ -56,23 +78,31 @@ export const getUsersChat = (chatData) => async (dispatch) => {
       },
     });
 
-    let data = [];
-    try {
-      data = await res.json();
-    } catch (e) {
-      console.log("Failed to parse response as JSON");
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(errorText || "Failed to fetch user chats");
     }
-    
-    console.log("get users chat ", data);
 
-    // Ensure data is always an array
+    const data = await res.json();
+
     const payload = Array.isArray(data) ? data : [];
-    
-    // Dispatch an action with the fetched user chat data
-    dispatch({ type: GET_USERS_CHAT, payload });
+
+    console.log("User chats fetched successfully:", payload);
+
+    dispatch({
+      type: GET_USERS_CHAT,
+      payload,
+    });
+
+    return payload;
   } catch (error) {
-    console.log("catch error ", error);
-    // Dispatch empty array on error
-    dispatch({ type: GET_USERS_CHAT, payload: [] });
+    console.error("Get user chats error:", error);
+
+    dispatch({
+      type: GET_USERS_CHAT,
+      payload: [],
+    });
+
+    return [];
   }
 };

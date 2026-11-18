@@ -2,38 +2,44 @@ import { useEffect, useState } from "react";
 import "./ProgressBar.css";
 
 const ProgressBar = ({ index, activeIndex, duration }) => {
-  // Check if this progress bar is currently active
-  const isActive = index === activeIndex;
-
-  // State to manage the progress of the bar
   const [progress, setProgress] = useState(0);
 
-  useEffect(() => {
-    const intervalId = setInterval(() => {
-      setProgress((prev) => {
-        if (prev < 100) {
-          return prev + 1;
-        }
-        clearInterval(intervalId);
-        return prev;
-      });
-    }, duration / 100);
-
-    // Clean up the interval when the component unmounts or activeIndex changes
-    return () => clearInterval(intervalId);
-  }, [duration, activeIndex]);
+  const isActive = index === activeIndex;
+  const isCompleted = index < activeIndex;
 
   useEffect(() => {
-    // Reset the progress when activeIndex changes
     setProgress(0);
-  }, [activeIndex]);
+
+    if (!isActive) return;
+
+    const startTime = Date.now();
+
+    const intervalId = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const percentage = Math.min((elapsed / duration) * 100, 100);
+
+      setProgress(percentage);
+
+      if (percentage >= 100) {
+        clearInterval(intervalId);
+      }
+    }, 30);
+
+    return () => clearInterval(intervalId);
+  }, [activeIndex, duration, isActive]);
 
   return (
-    <div className={`progress-bar-container ${isActive ? "active" : ""}`}>
+    <div className="progress-bar-container">
       <div
-        className={` ${isActive ? "progress-bar" : ""}`}
-        style={{ width: `${progress}%` }}
-      ></div>
+        className="progress-bar"
+        style={{
+          width: isCompleted
+            ? "100%"
+            : isActive
+              ? `${progress}%`
+              : "0%",
+        }}
+      />
     </div>
   );
 };

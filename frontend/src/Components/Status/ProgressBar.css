@@ -1,23 +1,21 @@
-/* Styles for the progress bar container */
 .progress-bar-container {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   height: 4px;
-  background-color: white;
-  border-radius: 4px;
+  margin: 0 2px;
   overflow: hidden;
-  opacity: 0.5; /* Initial opacity */
-  transition: opacity 0.3s ease-out; /* Smooth opacity transition */
-  margin: 1rem; /* Adds margin around the progress bar */
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.35);
 }
 
-/* Styles to make the container fully visible when active */
-.progress-bar-container .active {
-  opacity: 1; /* Fully visible when active */
-}
-
-/* Styles for the actual progress bar */
-.progress-bar {
+.progress-bar-container .progress-bar {
+  width: 0%;
   height: 100%;
-  background-color: rgb(41, 41, 255); /* Progress bar color */
-  border-radius: 4px; /* Rounded corners */
+  border-radius: 10px;
+  background: #ffffff;
+  transition: width 30ms linear;
+}
+
+.progress-bar-container.active {
+  background: rgba(255, 255, 255, 0.4);
 }

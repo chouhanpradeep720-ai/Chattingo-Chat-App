@@ -1,33 +1,50 @@
 import React from "react";
 
 const ChatCard = ({ userImg, name, lastMessage }) => {
-  // Function to format a timestamp to a readable date
+  const defaultAvatar =
+    "https://ui-avatars.com/api/?name=User&background=128C7E&color=fff";
+
   const formatTimestamp = (timestamp) => {
     if (!timestamp) return "";
 
-    const options = { year: "numeric", month: "short", day: "numeric" };
-    return new Date(timestamp).toLocaleDateString(undefined, options);
+    const date = new Date(timestamp);
+
+    if (Number.isNaN(date.getTime())) return "";
+
+    return date.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   };
+
   return (
-    <div className="flex items-center justify-center py-2 group cursor-pointer">
-      <div className="w-[19%]">
-        <img className="h-13 w-14 rounded-full" src={userImg} alt="profile" />
+    <div className="flex w-full items-center gap-3 px-4 py-3 transition-colors hover:bg-[#f5f6f6]">
+      <div className="relative shrink-0">
+        <img
+          src={userImg || defaultAvatar}
+          alt={name || "Profile"}
+          onError={(event) => {
+            event.currentTarget.src = defaultAvatar;
+          }}
+          className="h-12 w-12 rounded-full border border-gray-100 object-cover"
+        />
       </div>
-      <div className="pl-5 w-[80%]">
-        <div className="flex justify-between items-center">
-          <p className="text-lg">{name}</p>
-          <p className="text-sm">
-            {lastMessage ? formatTimestamp(lastMessage.timestamp) : ""}
+
+      <div className="min-w-0 flex-1 border-b border-gray-100 pb-3">
+        <div className="flex items-center justify-between gap-2">
+          <p className="truncate text-[15px] font-semibold text-gray-800">
+            {name || "Unknown User"}
           </p>
+
+          <span className="shrink-0 text-[11px] text-gray-500">
+            {formatTimestamp(lastMessage?.timestamp)}
+          </span>
         </div>
-        <div className="flex justify-between items-center">
-          <p className="text-gray-600 truncate">
-            {lastMessage ? lastMessage.content : ""}
+
+        <div className="mt-1 flex items-center justify-between gap-2">
+          <p className="truncate text-[13px] text-gray-500">
+            {lastMessage?.content || "Start your conversation"}
           </p>
-          <div className="flex space-x-2">
-            <span className="text-gray-500 text-xs">3h</span>
-            <span className="bg-green-500 h-2 w-2 rounded-full"></span>
-          </div>
         </div>
       </div>
     </div>

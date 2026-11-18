@@ -1,129 +1,221 @@
 import { useState } from "react";
-import { BsArrowLeft, BsCheck2, BsPencil } from "react-icons/bs";
+import {
+  BsArrowLeft,
+  BsCheck2,
+  BsPencil,
+  BsCamera,
+} from "react-icons/bs";
 import { useDispatch, useSelector } from "react-redux";
-import { useNavigate } from "react-router-dom";
 import { updateUser } from "../../Redux/Auth/Action";
 
 const Profile = ({ handleCloseOpenProfile }) => {
-  const [flag, setFlag] = useState(false);
-  const [username, setUsername] = useState(null);
-  const [tempPicture, setTempPicture] = useState(null);
   const { auth } = useSelector((store) => store);
   const dispatch = useDispatch();
 
-  const handleFlag = () => {
-    setFlag(true);
-  };
+  const [isEditing, setIsEditing] = useState(false);
+  const [username, setUsername] = useState(auth?.reqUser?.name || "");
+  const [tempPicture, setTempPicture] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleCheckClick = (e) => {
-    setFlag(false);
-    const data = {
-      id: auth.reqUser.id,
-      token: localStorage.getItem("token"),
-      data: { name: username },
-    };
-    dispatch(updateUser(data));
-  };
+  const defaultAvatar =
+    "https://ui-avatars.com/api/?name=User&background=128C7E&color=fff";
 
-  const handleChange = (e) => {
-    setUsername(e.target.value);
-  };
+  const handleSaveName = () => {
+    const trimmedName = username.trim();
 
-  const uploadToCloudinary = (pics) => {
-    const data = new FormData();
-    data.append("file", pics);
-    data.append("upload_preset", "chattingo");
-    data.append("cloud_name", "dadlxgune");
-    fetch("https://api.cloudinary.com/v1_1/dadlxgune/image/upload", {
-      method: "post",
-      body: data,
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        setTempPicture(data.url.toString());
-        const dataa = {
-          id: auth.reqUser.id,
-          token: localStorage.getItem("token"),
-          data: { profile: data.url.toString() },
-        };
-        dispatch(updateUser(dataa));
-      });
-  };
+    if (!trimmedName) {
+      setError("Name cannot be empty.");
+      return;
+    }
 
-  const handleUpdateName = (e) => {
-    if (e.key === "Enter") {
-      const data = {
+    dispatch(
+      updateUser({
         id: auth.reqUser.id,
         token: localStorage.getItem("token"),
-        data: { name: username },
-      };
-      dispatch(updateUser(data));
+        data: { name: trimmedName },
+      })
+    );
+
+    setUsername(trimmedName);
+    setIsEditing(false);
+    setError("");
+  };
+
+  const handleUpdateName = (event) => {
+    if (event.key === "Enter") {
+      handleSaveName();
+    }
+  };
+
+  const uploadToCloudinary = async (file) => {
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setError("Please select a valid image.");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setError("Image size must be less than 5 MB.");
+      return;
+    }
+
+    setUploading(true);
+    setError("");
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("upload_preset", "chattingo");
+
+      const response = await fetch(
+        "https://api.cloudinary.com/v1_1/dadlxgune/image/upload",
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok || !result.secure_url) {
+        throw new Error(result.error?.message || "Image upload failed.");
+      }
+
+      setTempPicture(result.secure_url);
+
+      dispatch(
+        updateUser({
+          id: auth.reqUser.id,
+          token: localStorage.getItem("token"),
+          data: { profile: result.secure_url },
+        })
+      );
+    } catch (err) {
+      setError(err.message || "Unable to upload image.");
+    } finally {
+      setUploading(false);
     }
   };
 
   return (
-    <div className="w-full h-full">
-      <div className="flex items-center space-x-10 bg-[#008069] text-white pt-16 px-10 pb-5">
-        <BsArrowLeft
-          className="cursor-pointer text-2xl font-bold"
+    <div className="flex h-full min-h-0 flex-col overflow-y-auto bg-[#f0f2f5]">
+      {/* Header */}
+      <div className="flex items-center gap-8 bg-[#008069] px-6 pb-5 pt-12 text-white sm:px-10">
+        <button
+          type="button"
           onClick={handleCloseOpenProfile}
-        />
-        <p className="cursor-pointer font-semibold">Profile</p>
+          className="rounded-full p-2 transition hover:bg-white/10"
+          title="Back"
+        >
+          <BsArrowLeft className="text-2xl" />
+        </button>
+
+        <h2 className="text-lg font-semibold">Profile</h2>
       </div>
 
-      {/* update profile pic section */}
-      <div className="flex flex-col justify-center items-center my-12">
-        <label htmlFor="imgInput">
+      {/* Profile Image */}
+      <div className="flex flex-col items-center px-5 py-10">
+        <div className="group relative">
           <img
-            className="rounded-full w-[15vw] h-[15vw] cursor-pointer"
+            className="h-36 w-36 rounded-full border-4 border-white object-cover shadow-md sm:h-44 sm:w-44"
             src={
-              auth.reqUser.profile ||
               tempPicture ||
-              "https://media.istockphoto.com/id/521977679/photo/silhouette-of-adult-woman.webp?b=1&s=170667a&w=0&k=20&c=wpJ0QJYXdbLx24H5LK08xSgiQ3zNkCAD2W3F74qlUL0="
+              auth?.reqUser?.profile ||
+              defaultAvatar
             }
-            alt=""
+            alt="Profile"
+            onError={(event) => {
+              event.currentTarget.src = defaultAvatar;
+            }}
           />
-        </label>
 
-        <input
-          onChange={(e) => uploadToCloudinary(e.target.files[0])}
-          type="file"
-          id="imgInput"
-          className="hidden"
-        />
+          <label
+            htmlFor="imgInput"
+            className="absolute bottom-1 right-1 flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border-2 border-white bg-[#008069] text-white shadow-md transition hover:bg-[#006b59]"
+            title="Change profile picture"
+          >
+            <BsCamera className="text-xl" />
+          </label>
+
+          <input
+            type="file"
+            id="imgInput"
+            accept="image/*"
+            className="hidden"
+            onChange={(event) => {
+              uploadToCloudinary(event.target.files?.[0]);
+              event.target.value = "";
+            }}
+          />
+        </div>
+
+        <p className="mt-4 text-sm text-gray-500">
+          {uploading
+            ? "Uploading picture..."
+            : "Tap the camera icon to change your photo"}
+        </p>
       </div>
 
-      {/* name section */}
-      <div className="bg-white px-3">
-        <p className="py-3">Your name</p>
+      {/* Name Section */}
+      <div className="mx-4 rounded-xl bg-white p-5 shadow-sm sm:mx-8">
+        <p className="mb-4 text-sm font-medium text-[#008069]">
+          Your name
+        </p>
 
-        {!flag && (
-          <div className="w-full flex justify-between items-center">
-            <p className="py-3 ">{auth.reqUser?.name || "Username"}</p>
-            <BsPencil onClick={handleFlag} className="cursor-pointer" />
+        {!isEditing ? (
+          <div className="flex items-center justify-between gap-3">
+            <p className="break-words text-base font-medium text-gray-800">
+              {auth?.reqUser?.name || "Username"}
+            </p>
+
+            <button
+              type="button"
+              onClick={() => {
+                setUsername(auth?.reqUser?.name || "");
+                setIsEditing(true);
+                setError("");
+              }}
+              title="Edit name"
+              className="rounded-full p-2 text-gray-500 transition hover:bg-gray-100 hover:text-[#008069]"
+            >
+              <BsPencil className="text-lg" />
+            </button>
           </div>
-        )}
-
-        {flag && (
-          <div className="w-full flex justify-between items-center py-2">
+        ) : (
+          <div className="flex items-center gap-3">
             <input
-              onKeyPress={handleUpdateName}
-              onChange={handleChange}
               type="text"
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              onKeyDown={handleUpdateName}
               placeholder="Enter your name"
-              className="w-[80%] outline-none border-b-2 border-blue-700 p-2 "
+              autoFocus
+              className="min-w-0 flex-1 border-b-2 border-[#008069] bg-transparent px-2 py-2 text-sm text-gray-800 outline-none"
             />
-            <BsCheck2
-              onClick={handleCheckClick}
-              className="cursor-pointer text-2xl"
-            />
+
+            <button
+              type="button"
+              onClick={handleSaveName}
+              title="Save name"
+              className="rounded-full p-2 text-xl text-[#008069] transition hover:bg-green-50"
+            >
+              <BsCheck2 />
+            </button>
           </div>
+        )}
+
+        {error && (
+          <p className="mt-3 text-sm text-red-600">{error}</p>
         )}
       </div>
 
-      <div className="px-3 my-5">
-        <p className="py-10">
-          This is not your username or pin. This name will be visible to others.
+      {/* Information */}
+      <div className="mx-4 mb-8 mt-5 rounded-xl bg-white p-5 shadow-sm sm:mx-8">
+        <p className="text-sm leading-6 text-gray-500">
+          This is not your username or PIN. This name will be visible to
+          other people who contact you on Chattingo.
         </p>
       </div>
     </div>

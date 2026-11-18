@@ -1,19 +1,25 @@
-import { CREATE_NEW_MESSAGE, GET_ALL_MESSAGE } from "./ActionType";
+import { CREATE_NEW_MESSAGE, GET_ALL_MESSAGE } from "./ActionType.js";
 
-// Initial state for the message store
 const initialValue = {
-  messages: null, // Holds an array of messages
-  newMessage: null, // Holds data related to a newly created message
+  messages: [],
+  newMessage: null,
 };
 
-// Reducer function for handling message-related actions
 export const messageReducer = (store = initialValue, { type, payload }) => {
-  // Check the action type and update the store accordingly
-  if (type === CREATE_NEW_MESSAGE) {
-    return { ...store, newMessage: payload };
-  } else if (type === GET_ALL_MESSAGE) {
-    return { ...store, messages: payload };
+  switch (type) {
+    case GET_ALL_MESSAGE:
+      return {
+        ...store,
+        messages: Array.isArray(payload) ? payload : [],
+      };
+
+    case CREATE_NEW_MESSAGE:
+      return {
+        ...store,
+        newMessage: payload,
+      };
+
+    default:
+      return store;
   }
-  // If the action type is not recognized, return the current store unchanged
-  return store;
 };

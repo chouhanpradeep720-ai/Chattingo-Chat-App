@@ -1,5 +1,5 @@
-import React from 'react';
-import ChatCard from '../ChatCard/ChatCard';
+import React from "react";
+import ChatCard from "../ChatCard/ChatCard";
 
 const ChatList = ({
   querys,
@@ -9,49 +9,136 @@ const ChatList = ({
   handleClickOnChatCard,
   handleCurrentChat,
 }) => {
+  const searchUsers = Array.isArray(auth?.searchUser)
+    ? auth.searchUser
+    : [];
+
+  const chats = Array.isArray(chat?.chats) ? chat.chats : [];
+
+  const defaultAvatar =
+    "https://ui-avatars.com/api/?name=User&background=128C7E&color=fff";
+
+  const getChatName = (item) => {
+    if (item.group) {
+      return item.chatName || "Group Chat";
+    }
+
+    const otherUser = item.users?.find(
+      (user) => user.id !== auth?.reqUser?.id
+    );
+
+    return otherUser?.name || "Unknown User";
+  };
+
+  const getChatImage = (item) => {
+    if (item.group) {
+      return item.chatImage || defaultAvatar;
+    }
+
+    const otherUser = item.users?.find(
+      (user) => user.id !== auth?.reqUser?.id
+    );
+
+    return otherUser?.profile || defaultAvatar;
+  };
+
+  const formatTime = (timestamp) => {
+    if (!timestamp) return "";
+
+    const date = new Date(timestamp);
+
+    if (Number.isNaN(date.getTime())) return "";
+
+    const now = new Date();
+    const isToday = date.toDateString() === now.toDateString();
+
+    if (isToday) {
+      return date.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    }
+
+    return date.toLocaleDateString([], {
+      day: "2-digit",
+      month: "short",
+    });
+  };
+
   return (
-    <div className="bg-white overflow-y-scroll h-[73vh] px-3">
-      {querys && Array.isArray(auth.searchUser) &&
-        auth.searchUser.map((item, index) => (
-          <div key={index} onClick={() => handleClickOnChatCard(item.id)}>
-            <hr />
-            <ChatCard
-              name={item.name}
-              userImg={
-                item.profile ||
-                "https://media.istockphoto.com/id/521977679/photo/silhouette-of-adult-woman.webp?b=1&s=170667a&w=0&k=20&c=wpJ0QJYXdbLx24H5LK08xSgiQ3zNkCAD2W3F74qlUL0="
-              }
-              lastMessage={{
-                content:
-                  lastMessages[item.id]?.content || "Start your conversation",
-                timestamp: lastMessages[item.id]?.timestamp || "",
-              }}
-            />
+    <div className="chattingo-chat-list bg-white overflow-y-auto h-full">
+      {querys ? (
+        searchUsers.length > 0 ? (
+          <>
+            <p className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
+              Search Results
+            </p>
+
+            {searchUsers.map((item) => (
+              <div
+                key={item.id}
+                onClick={() => handleClickOnChatCard(item.id)}
+                className="cursor-pointer border-b border-gray-100 transition hover:bg-gray-50"
+              >
+                <ChatCard
+                  name={item.name || "Unknown User"}
+                  userImg={item.profile || defaultAvatar}
+                  lastMessage={{
+                    content: "Start your conversation",
+                    timestamp: "",
+                  }}
+                />
+              </div>
+            ))}
+          </>
+        ) : (
+          <div className="px-5 py-12 text-center">
+            <p className="text-sm font-medium text-gray-600">
+              No users found
+            </p>
+            <p className="mt-1 text-xs text-gray-400">
+              Try searching with another name
+            </p>
           </div>
-        ))}
-      {chat?.chats?.length > 0 &&
-        !querys &&
-        chat?.chats?.map((item, index) => (
-          <div key={index} onClick={() => {
-            handleCurrentChat(item)
-            console.log("the item is ",item)
-          }}>
-            <hr />
-            <ChatCard
-              isChat={!item.group}
-              name={item.group ? item.chatName : auth.reqUser?.id !== item.users[0]?.id ? item.users[0]?.name : item.users[1]?.name}
-              userImg={
-                item.chatImage ||
-                "https://media.istockphoto.com/id/1455296779/photo/smiling-businesspeople-standing-arm-in-arm-in-an-office-hall.webp?b=1&s=170667a&w=0&k=20&c=0bdu3-mVcOw6FN_vIkwTx4pCE6jgL7Jy29bBWZhoiik="
-              }
-              lastMessage={{
-                content:
-                  lastMessages[item.id]?.content || "Start your conversation",
-                timestamp: lastMessages[item.id]?.timestamp || "",
-              }}
-            />
-          </div>
-        ))}
+        )
+      ) : chats.length > 0 ? (
+        <>
+          <p className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
+            Recent Chats
+          </p>
+
+          {chats.map((item) => {
+            const lastMessage = lastMessages?.[item.id];
+
+            return (
+              <div
+                key={item.id}
+                onClick={() => handleCurrentChat(item)}
+                className="cursor-pointer border-b border-gray-100 transition hover:bg-[#f5f6f6]"
+              >
+                <ChatCard
+                  name={getChatName(item)}
+                  userImg={getChatImage(item)}
+                  lastMessage={{
+                    content:
+                      lastMessage?.content || "Start your conversation",
+                    timestamp: lastMessage?.timestamp || "",
+                  }}
+                />
+              </div>
+            );
+          })}
+        </>
+      ) : (
+        <div className="px-5 py-12 text-center">
+          <p className="text-sm font-medium text-gray-600">
+            No chats available
+          </p>
+          <p className="mt-1 text-xs text-gray-400">
+            Search for a user to start chatting
+          </p>
+        </div>
+      )}
     </div>
   );
 };

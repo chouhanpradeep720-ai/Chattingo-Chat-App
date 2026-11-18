@@ -8,7 +8,7 @@ import {
   UPDATE_USER,
 } from "./ActionType";
 
-// Action creator for user registration
+// User registration
 export const register = (data) => async (dispatch) => {
   try {
     const res = await fetch(`${BASE_API_URL}/auth/signup`, {
@@ -18,8 +18,8 @@ export const register = (data) => async (dispatch) => {
       },
       body: JSON.stringify(data),
     });
-    let resData = null;
-    try { resData = await res.json(); } catch (_) { /* non-JSON or empty */ }
+
+    const resData = await res.json();
 
     if (res.ok && resData?.jwt) {
       localStorage.setItem("token", resData.jwt);
@@ -28,12 +28,12 @@ export const register = (data) => async (dispatch) => {
 
     return resData;
   } catch (error) {
-    console.log("catch error", error);
+    console.error("Register error:", error);
     return null;
   }
 };
 
-// Action creator for user login
+// User login
 export const login = (data) => async (dispatch) => {
   try {
     const res = await fetch(`${BASE_API_URL}/auth/signin`, {
@@ -43,8 +43,8 @@ export const login = (data) => async (dispatch) => {
       },
       body: JSON.stringify(data),
     });
-    let resData = null;
-    try { resData = await res.json(); } catch (_) { /* non-JSON or empty */ }
+
+    const resData = await res.json();
 
     if (res.ok && resData?.jwt) {
       localStorage.setItem("token", resData.jwt);
@@ -53,12 +53,12 @@ export const login = (data) => async (dispatch) => {
 
     return resData;
   } catch (error) {
-    console.log("catch error", error);
+    console.error("Login error:", error);
     return null;
   }
 };
 
-// Action creator for fetching the current user's data
+// Fetch current user
 export const currentUser = (token) => async (dispatch) => {
   try {
     const res = await fetch(`${BASE_API_URL}/api/users/profile`, {
@@ -68,38 +68,80 @@ export const currentUser = (token) => async (dispatch) => {
         Authorization: `Bearer ${token}`,
       },
     });
+
+    if (!res.ok) {
+      throw new Error("Failed to fetch current user");
+    }
+
     const resData = await res.json();
 
-    console.log("current user", resData);
-    dispatch({ type: REQ_USER, payload: resData });
+    console.log("Current user:", resData);
+
+    dispatch({
+      type: REQ_USER,
+      payload: resData,
+    });
+
     return resData;
   } catch (error) {
-    console.log("catch error", error);
+    console.error("Current user error:", error);
     return null;
   }
 };
 
-// Action creator for searching for users
+// Search users
 export const searchUser = (data) => async (dispatch) => {
   try {
-    console.log(data);
-    const res = await fetch(`${BASE_API_URL}/api/users/${data.keyword}`, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${data.token}`,
-      },
-    });
+    const keyword = data.keyword?.trim() || "";
+
+    if (!keyword) {
+      dispatch({
+        type: SEARCH_USER,
+        payload: [],
+      });
+      return [];
+    }
+
+    const res = await fetch(
+      `${BASE_API_URL}/api/users/${encodeURIComponent(keyword)}`,
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${data.token}`,
+        },
+      }
+    );
+
+    if (!res.ok) {
+      throw new Error("Failed to search users");
+    }
+
     const resData = await res.json();
 
-    console.log("search", resData);
-    dispatch({ type: SEARCH_USER, payload: resData });
+    const users = Array.isArray(resData) ? resData : [];
+
+    console.log("Search results:", users);
+
+    dispatch({
+      type: SEARCH_USER,
+      payload: users,
+    });
+
+    return users;
   } catch (error) {
-    console.log("catch error", error);
+    console.error("Search user error:", error);
+
+    dispatch({
+      type: SEARCH_USER,
+      payload: [],
+    });
+
+    return [];
   }
 };
 
-// Action creator for updating user data
+// Update user
 export const updateUser = (data) => async (dispatch) => {
   try {
     const res = await fetch(`${BASE_API_URL}/api/users/update`, {
@@ -110,21 +152,43 @@ export const updateUser = (data) => async (dispatch) => {
       },
       body: JSON.stringify(data.data),
     });
+
+    if (!res.ok) {
+      throw new Error("Failed to update user");
+    }
+
     const resData = await res.json();
 
-    console.log("updated user", resData);
-    dispatch({ type: UPDATE_USER, payload: resData });
+    console.log("Updated user:", resData);
+
+    dispatch({
+      type: UPDATE_USER,
+      payload: resData,
+    });
+
+    return resData;
   } catch (error) {
-    console.log("catch error", error);
+    console.error("Update user error:", error);
+    return null;
   }
 };
 
-// Action creator for user logout
+// User logout
 export const logoutAction = () => async (dispatch) => {
-  // Remove the JWT token from local storage
   localStorage.removeItem("token");
 
-  // Dispatch actions to indicate logout
-  dispatch({ type: LOGOUT, payload: null });
-  dispatch({ type: REQ_USER, payload: null });
+  dispatch({
+    type: LOGOUT,
+    payload: null,
+  });
+
+  dispatch({
+    type: REQ_USER,
+    payload: null,
+  });
+
+  dispatch({
+    type: SEARCH_USER,
+    payload: [],
+  });
 };

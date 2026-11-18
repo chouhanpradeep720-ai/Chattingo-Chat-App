@@ -1,7 +1,7 @@
 import { BASE_API_URL } from "../../config/api";
 import { CREATE_NEW_MESSAGE, GET_ALL_MESSAGE } from "./ActionType.js";
 
-// Action creator for creating a new message
+// Create a new message
 export const createMessage = (messageData) => async (dispatch) => {
   try {
     const res = await fetch(`${BASE_API_URL}/api/messages/create`, {
@@ -13,35 +13,64 @@ export const createMessage = (messageData) => async (dispatch) => {
       body: JSON.stringify(messageData.data),
     });
 
-    const data = await res.json();
-    console.log("create message ", data);
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(errorText || "Failed to send message");
+    }
 
-    // Dispatch an action with the created message data
-    dispatch({ type: CREATE_NEW_MESSAGE, payload: data });
+    const data = await res.json();
+
+    console.log("Message created successfully:", data);
+
+    dispatch({
+      type: CREATE_NEW_MESSAGE,
+      payload: data,
+    });
+
+    return data;
   } catch (error) {
-    console.log("catch error ", error);
+    console.error("Create message error:", error);
+    return null;
   }
 };
 
-// Action creator for getting all messages for a chat
+// Get all messages for the selected chat
 export const getAllMessages = (reqData) => async (dispatch) => {
-  console.log("Came inside get all messages");
-
   try {
-    const res = await fetch(`${BASE_API_URL}/api/messages/${reqData.chatId}`, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${reqData.token}`,
-      },
-    });
+    const res = await fetch(
+      `${BASE_API_URL}/api/messages/${reqData.chatId}`,
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${reqData.token}`,
+        },
+      }
+    );
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(errorText || "Failed to fetch messages");
+    }
 
     const data = await res.json();
-    console.log("get all messages from action method", data);
 
-    // Dispatch an action with the fetched messages data
-    dispatch({ type: GET_ALL_MESSAGE, payload: data });
+    console.log("Fetched chat messages:", data);
+
+    dispatch({
+      type: GET_ALL_MESSAGE,
+      payload: Array.isArray(data) ? data : [],
+    });
+
+    return Array.isArray(data) ? data : [];
   } catch (error) {
-    console.log("catch error ", error);
+    console.error("Get messages error:", error);
+
+    dispatch({
+      type: GET_ALL_MESSAGE,
+      payload: [],
+    });
+
+    return [];
   }
 };
