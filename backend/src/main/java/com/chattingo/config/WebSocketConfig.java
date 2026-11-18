@@ -14,20 +14,28 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Value("${cors.allowed.origins:http://localhost:3000,http://localhost}")
     private String allowedOrigins;
 
-    @SuppressWarnings("null")
+    // Register WebSocket endpoint
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        // Parse allowed origins from environment variable
+
         String[] origins = allowedOrigins.split(",");
-        registry.addEndpoint("/ws").setAllowedOrigins(origins).withSockJS();
+
+        registry.addEndpoint("/ws")
+                .setAllowedOrigins(origins)
+                .withSockJS();
     }
 
-    @SuppressWarnings("null")
+    // Configure message broker
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
+
+        // Destinations for messages sent from frontend to backend
         registry.setApplicationDestinationPrefixes("/app");
-        registry.enableSimpleBroker("/group", "/user");
+
+        // Destinations for messages broadcast to subscribed clients
+        registry.enableSimpleBroker("/topic", "/group", "/user");
+
+        // Prefix for user-specific destinations
         registry.setUserDestinationPrefix("/user");
     }
-
 }

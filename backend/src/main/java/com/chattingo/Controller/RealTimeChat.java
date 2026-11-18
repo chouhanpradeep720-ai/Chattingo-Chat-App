@@ -1,21 +1,12 @@
 package com.chattingo.Controller;
 
-import org.springframework.messaging.handler.annotation.MessageMapping;
-import org.springframework.messaging.handler.annotation.Payload;
-import org.springframework.messaging.handler.annotation.SendTo;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
-
-import com.chattingo.Model.Message;
-
-public class RealTimeChat {
-
-    private SimpMessagingTemplate simpMessagingTemplate;
-
-    @MessageMapping("/message")
-    @SendTo("/group/public")
-    public Message recieveMessage(@Payload Message message) {
-        simpMessagingTemplate.convertAndSend("/group" + message.getChat().getId().toString(), message);
-        return message;
-    }
-
-}
+/*
+ * Message broadcasting is handled by MessageServiceImpl.
+ *
+ * Messages are:
+ * 1. Received through MessageController REST API.
+ * 2. Saved in the database by MessageServiceImpl.
+ * 3. Broadcast to /topic/chat/{chatId} using SimpMessagingTemplate.
+ *
+ * No separate STOMP message handler is required here.
+ */

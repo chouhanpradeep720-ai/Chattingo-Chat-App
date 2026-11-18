@@ -1,5 +1,7 @@
 package com.chattingo.Model;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -11,9 +13,14 @@ public class User {
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)
     private int id;
+
     private String name;
+
     private String email;
+
     private String profile;
+
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String password;
 
     public int getId() {
@@ -69,8 +76,10 @@ public class User {
 
     @Override
     public String toString() {
-        return "User [id=" + id + ", name=" + name + ", email=" + email + ", profile=" + profile + ", password="
-                + password + "]";
+        return "User [id=" + id
+                + ", name=" + name
+                + ", email=" + email
+                + ", profile=" + profile
+                + ", password=PROTECTED]";
     }
-
 }

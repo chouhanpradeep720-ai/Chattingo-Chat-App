@@ -2,6 +2,7 @@ package com.chattingo.ServiceImpl;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -29,64 +30,84 @@ public class MessageServiceImpl implements MessageService {
     @Autowired
     private ChatServiceImpl chatService;
 
-     @Autowired
+    @Autowired
     private SimpMessagingTemplate messagingTemplate;
 
     @Override
-    public Message sendMessage(SendMessageRequest req) throws UserException, ChatException {
-        User user = this.userService.findUserById(req.getUserId());
-        Chat chat = this.chatService.findChatById(req.getChatId());
+    public Message sendMessage(SendMessageRequest req)
+            throws UserException, ChatException {
+
+        User user = userService.findUserById(req.getUserId());
+
+        Chat chat = chatService.findChatById(req.getChatId());
+
+        boolean isChatMember = chat.getUsers().stream()
+                .anyMatch(chatUser ->
+                        Objects.equals(chatUser.getId(), user.getId()));
+
+        if (!isChatMember) {
+            throw new UserException("You are not related to this chat");
+        }
 
         Message message = new Message();
+
         message.setChat(chat);
         message.setUser(user);
         message.setContent(req.getContent());
         message.setTimestamp(LocalDateTime.now());
 
-        message = this.messageRepository.save(message);
+        Message savedMessage = messageRepository.save(message);
 
-        // Send message to WebSocket topic based on chat type
-        if (chat.isGroup()) {
-            messagingTemplate.convertAndSend("/group/" + chat.getId(), message);
-        } else {
-            messagingTemplate.convertAndSend( "/user/" + chat.getId(), message);
-        }
+        // Broadcast message to all users subscribed to this chat.
+        messagingTemplate.convertAndSend(
+                "/topic/chat/" + chat.getId(),
+                savedMessage
+        );
 
-        return message;
+        return savedMessage;
     }
 
     @Override
-    public List<Message> getChatsMessages(Integer chatId, User reqUser) throws ChatException, UserException {
+    public List<Message> getChatsMessages(Integer chatId, User reqUser)
+            throws ChatException, UserException {
 
-        Chat chat = this.chatService.findChatById(chatId);
+        Chat chat = chatService.findChatById(chatId);
 
-        if (!chat.getUsers().contains(reqUser)) {
+        boolean isChatMember = chat.getUsers().stream()
+                .anyMatch(chatUser ->
+                        Objects.equals(chatUser.getId(), reqUser.getId()));
+
+        if (!isChatMember) {
             throw new UserException("You are not related to this chat");
         }
 
-        List<Message> messages = this.messageRepository.findByChatId(chat.getId());
-
-        return messages;
-
+        return messageRepository.findByChatId(chat.getId());
     }
 
     @Override
-    public Message findMessageById(Integer messageId) throws MessageException {
-        Message message = this.messageRepository.findById(messageId)
-                .orElseThrow(() -> new MessageException("The required message is not found"));
-        return message;
+    public Message findMessageById(Integer messageId)
+            throws MessageException {
+
+        return messageRepository.findById(messageId)
+                .orElseThrow(() ->
+                        new MessageException("Message not found"));
     }
 
     @Override
-    public void deleteMessage(Integer messageId, User reqUser) throws MessageException {
-        Message message = this.messageRepository.findById(messageId)
-                .orElseThrow(() -> new MessageException("The required message is not found"));
+    public void deleteMessage(Integer messageId, User reqUser)
+            throws MessageException {
 
-        if (message.getUser().getId() == reqUser.getId()) {
-            this.messageRepository.delete(message);
+        Message message = findMessageById(messageId);
+
+        if (Objects.equals(
+                message.getUser().getId(),
+                reqUser.getId())) {
+
+            messageRepository.delete(message);
+
         } else {
-            throw new MessageException("You are not authorized for this task");
+            throw new MessageException(
+                    "You cannot delete another user's message");
         }
     }
-
 }
