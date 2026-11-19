@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import "./HomePage.css";
 import { useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
@@ -7,7 +7,6 @@ import { createChat, getUsersChat } from "../Redux/Chat/Action";
 import { createMessage, getAllMessages } from "../Redux/Message/Action";
 import SockJs from "sockjs-client/dist/sockjs";
 import { Client } from "@stomp/stompjs";
-import EmojiPicker from "emoji-picker-react";
 
 import Profile from "./Profile/Profile";
 import CreateGroup from "./Group/CreateGroup";
@@ -16,16 +15,27 @@ import SearchBar from "./HomeComponents/SearchBar";
 import ChatList from "./HomeComponents/ChatList";
 import MessageCard from "./MessageCard/MessageCard";
 
+import ReplyPreview from "./Message/ReplyPreview";
+import MessageSearch from "./Message/MessageSearch";
+import PinnedMessages from "./Message/PinnedMessages";
+import MessageComposer from "./Message/MessageComposer";
+
+import AttachmentMenu from "./Media/AttachmentMenu";
+import FilePreview from "./Media/FilePreview";
+import VoiceRecorder from "./Media/VoiceRecorder";
+
+import TypingIndicator from "./Chat/TypingIndicator";
+import PresenceBadge from "./Chat/PresenceBadge";
+import LastSeen from "./Chat/LastSeen";
+
+import "./ChattingoFeatures.css";
+
 import {
   AiOutlineSearch,
   AiOutlineArrowLeft,
 } from "react-icons/ai";
 
-import {
-  BsEmojiSmile,
-  BsThreeDotsVertical,
-  BsSendFill,
-} from "react-icons/bs";
+import { BsThreeDotsVertical } from "react-icons/bs";
 
 import { BASE_API_URL } from "../config/api";
 
@@ -36,35 +46,39 @@ function HomePage() {
   const [isProfile, setIsProfile] = useState(false);
   const [isGroup, setIsGroup] = useState(false);
   const [anchorEl, setAnchorEl] = useState(null);
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+
+  // Message features
+  const [replyTo, setReplyTo] = useState(null);
+  const [showMessageSearch, setShowMessageSearch] = useState(false);
+  const [pinnedMessages, setPinnedMessages] = useState([]);
+  const [messages, setMessages] = useState([]);
+  const [lastMessages, setLastMessages] = useState({});
+
+  // Presence and typing placeholders (backend integration pending)
+  const [otherUserOnline, setOtherUserOnline] = useState(null);
+  const [otherUserLastSeen, setOtherUserLastSeen] = useState(null);
+  const [typingUsers, setTypingUsers] = useState([]);
+
+  // Media states
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
+  const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
 
   const open = Boolean(anchorEl);
   const navigate = useNavigate();
   const dispatch = useDispatch();
 
   const { auth, chat, message } = useSelector((store) => store);
-
   const token = localStorage.getItem("token");
 
   const [stompClient, setStompClient] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
-  const [messages, setMessages] = useState([]);
-  const [lastMessages, setLastMessages] = useState({});
 
   const messageContainerRef = useRef(null);
   const stompClientRef = useRef(null);
 
-  // Get cookie value
-  function getCookie(name) {
-    const value = `; ${document.cookie}`;
-    const parts = value.split(`; ${name}=`);
-
-    if (parts.length === 2) {
-      return parts.pop().split(";").shift();
-    }
-
-    return null;
-  }
+  const defaultAvatar =
+    "https://ui-avatars.com/api/?name=User&background=128C7E&color=fff";
 
   // Scroll to latest message
   useEffect(() => {
@@ -74,9 +88,25 @@ function HomePage() {
     }
   }, [messages]);
 
+  // Reset presence and typing states when chat changes
+  useEffect(() => {
+    setOtherUserOnline(null);
+    setOtherUserLastSeen(null);
+    setTypingUsers([]);
+  }, [currentChat?.id]);
+
   // WebSocket connection
-  const connect = () => {
+  const connect = useCallback(() => {
     if (!token) return;
+
+    const getCookie = (name) => {
+      const value = `; ${document.cookie}`;
+      const parts = value.split(`; ${name}=`);
+      if (parts.length === 2) {
+        return parts.pop().split(";").shift();
+      }
+      return null;
+    };
 
     const client = new Client({
       webSocketFactory: () => new SockJs(`${BASE_API_URL}/ws`),
@@ -110,12 +140,11 @@ function HomePage() {
 
     stompClientRef.current = client;
     setStompClient(client);
-
     client.activate();
-  };
+  }, [token]);
 
   // Receive WebSocket messages
-  const onMessageReceive = (payload) => {
+  const onMessageReceive = useCallback((payload) => {
     try {
       const receivedMessage = JSON.parse(payload.body);
 
@@ -124,9 +153,7 @@ function HomePage() {
           (msg) => msg.id === receivedMessage.id
         );
 
-        if (alreadyExists) {
-          return previousMessages;
-        }
+        if (alreadyExists) return previousMessages;
 
         return [...previousMessages, receivedMessage];
       });
@@ -140,9 +167,9 @@ function HomePage() {
     } catch (error) {
       console.error("Error receiving message:", error);
     }
-  };
+  }, []);
 
-  // Establish WebSocket connection
+  // Connect WebSocket
   useEffect(() => {
     connect();
 
@@ -152,26 +179,19 @@ function HomePage() {
         stompClientRef.current = null;
       }
     };
-  }, []);
+  }, [connect]);
 
   // Subscribe to selected chat
   useEffect(() => {
-    if (!isConnected || !stompClient || !currentChat?.id) {
-      return;
-    }
+    if (!isConnected || !stompClient || !currentChat?.id) return;
 
     const subscription = stompClient.subscribe(
       `/topic/chat/${currentChat.id}`,
       onMessageReceive
     );
 
-    console.log(`Subscribed to chat: ${currentChat.id}`);
-
-    return () => {
-      subscription.unsubscribe();
-      console.log(`Unsubscribed from chat: ${currentChat.id}`);
-    };
-  }, [isConnected, stompClient, currentChat?.id]);
+    return () => subscription.unsubscribe();
+  }, [isConnected, stompClient, currentChat?.id, onMessageReceive]);
 
   // Fetch selected chat messages
   useEffect(() => {
@@ -190,11 +210,9 @@ function HomePage() {
     );
   }, [currentChat?.id, token, dispatch]);
 
-  // Update messages from Redux
+  // Sync messages from Redux
   useEffect(() => {
-    if (!Array.isArray(message.messages) || !currentChat?.id) {
-      return;
-    }
+    if (!Array.isArray(message.messages) || !currentChat?.id) return;
 
     const currentChatMessages = message.messages.filter(
       (msg) => msg.chat?.id === currentChat.id
@@ -203,14 +221,39 @@ function HomePage() {
     setMessages(currentChatMessages);
   }, [message.messages, currentChat?.id]);
 
-  // Fetch user's chats
+  // Load pinned messages
+  useEffect(() => {
+    if (!currentChat?.id) {
+      setPinnedMessages([]);
+      setReplyTo(null);
+      setShowMessageSearch(false);
+      return;
+    }
+
+    const storageKey = `chattingo-pinned-${currentChat.id}`;
+
+    try {
+      const storedPins = JSON.parse(localStorage.getItem(storageKey) || "[]");
+      setPinnedMessages(Array.isArray(storedPins) ? storedPins : []);
+    } catch {
+      setPinnedMessages([]);
+    }
+
+    setReplyTo(null);
+    setShowMessageSearch(false);
+    setSelectedFile(null);
+    setShowAttachmentMenu(false);
+    setShowVoiceRecorder(false);
+  }, [currentChat?.id]);
+
+  // Fetch chats
   useEffect(() => {
     if (token) {
       dispatch(getUsersChat({ token }));
     }
   }, [token, chat.createdChat, chat.createdGroup, dispatch]);
 
-  // Automatically open newly created chat
+  // Open newly created chat
   useEffect(() => {
     if (chat.createdChat?.id) {
       setCurrentChat(chat.createdChat);
@@ -220,24 +263,21 @@ function HomePage() {
 
   // Fetch current user
   useEffect(() => {
-    if (token) {
-      dispatch(currentUser(token));
-    }
+    if (token) dispatch(currentUser(token));
   }, [token, dispatch]);
 
-  // User menu handlers
-  const handleClick = (event) => {
-    setAnchorEl(event.currentTarget);
-  };
+  // User menu
+  const handleClick = (event) => setAnchorEl(event.currentTarget);
+  const handleClose = () => setAnchorEl(null);
 
-  const handleClose = () => {
-    setAnchorEl(null);
-  };
-
-  // Open selected chat
+  // Select chat
   const handleCurrentChat = (item) => {
     setCurrentChat(item);
-    setShowEmojiPicker(false);
+    setReplyTo(null);
+    setShowMessageSearch(false);
+    setShowAttachmentMenu(false);
+    setSelectedFile(null);
+    setShowVoiceRecorder(false);
   };
 
   // Search users
@@ -251,7 +291,7 @@ function HomePage() {
     dispatch(searchUser({ keyword, token }));
   };
 
-  // Create or open one-to-one chat
+  // Create chat
   const handleClickOnChatCard = (userId) => {
     if (!userId) return;
 
@@ -263,13 +303,11 @@ function HomePage() {
     );
   };
 
-  // Send message
+  // Send normal text message
   const handleCreateNewMessage = () => {
     const trimmedContent = content.trim();
 
-    if (!trimmedContent || !currentChat?.id) {
-      return;
-    }
+    if (!trimmedContent || !currentChat?.id) return;
 
     dispatch(
       createMessage({
@@ -282,37 +320,320 @@ function HomePage() {
     );
 
     setContent("");
-    setShowEmojiPicker(false);
+    setReplyTo(null);
   };
 
-  // Add selected emoji to input
-  const handleEmojiClick = (emojiData) => {
-    setContent((previous) => previous + emojiData.emoji);
+  // Select attachment
+  const handleFileSelect = (file) => {
+    if (!file) return;
+
+    setSelectedFile(file);
+    setShowAttachmentMenu(false);
   };
 
-  // Open profile
+  // Send attachment (local frontend preview/demo)
+  const handleSendAttachment = (file) => {
+    if (!file || !currentChat?.id) return;
+
+    const mediaUrl = URL.createObjectURL(file);
+
+    let mediaType = "document";
+
+    if (file.type.startsWith("image/")) {
+      mediaType = "image";
+    } else if (file.type.startsWith("video/")) {
+      mediaType = "video";
+    } else if (file.type.startsWith("audio/")) {
+      mediaType = "audio";
+    }
+
+    const localMessage = {
+      id: `local-${Date.now()}`,
+      content: file.name,
+      timestamp: new Date().toISOString(),
+      chat: currentChat,
+      user: auth?.reqUser,
+      mediaUrl,
+      mediaType,
+      fileName: file.name,
+      fileSize: file.size,
+      replyTo: replyTo
+        ? {
+          id: replyTo.id,
+          content: replyTo.content,
+          sender: replyTo.sender || replyTo.user,
+        }
+        : null,
+      localOnly: true,
+    };
+
+    setMessages((previous) => [...previous, localMessage]);
+
+    setLastMessages((previous) => ({
+      ...previous,
+      [currentChat.id]: localMessage,
+    }));
+
+    setSelectedFile(null);
+    setReplyTo(null);
+  };
+
+  // Start voice recorder
+  const handleStartVoice = () => {
+    setShowVoiceRecorder(true);
+    setShowAttachmentMenu(false);
+  };
+
+  // Save voice message locally (backend upload pending)
+  const handleVoiceRecordingComplete = (blob, duration) => {
+    if (!blob || !currentChat?.id) {
+      setShowVoiceRecorder(false);
+      return;
+    }
+
+    const voiceUrl = URL.createObjectURL(blob);
+
+    const localMessage = {
+      id: `local-voice-${Date.now()}`,
+      content: "Voice message",
+      timestamp: new Date().toISOString(),
+      chat: currentChat,
+      user: auth?.reqUser,
+      mediaUrl: voiceUrl,
+      mediaType: "audio",
+      isVoiceMessage: true,
+      voiceDuration: duration,
+      fileName: "voice-message.webm",
+      replyTo: replyTo
+        ? {
+          id: replyTo.id,
+          content: replyTo.content,
+          sender: replyTo.sender || replyTo.user,
+        }
+        : null,
+      localOnly: true,
+    };
+
+    setMessages((previous) => [...previous, localMessage]);
+
+    setLastMessages((previous) => ({
+      ...previous,
+      [currentChat.id]: localMessage,
+    }));
+
+    setReplyTo(null);
+    setShowVoiceRecorder(false);
+  };
+
+  // Reply
+  const handleReplyMessage = (selectedMessage) => {
+    setReplyTo(selectedMessage);
+  };
+
+  const handleCancelReply = () => setReplyTo(null);
+
+  // Edit (local state only)
+  const handleEditMessage = (selectedMessage, updatedContent) => {
+    const selectedId =
+      typeof selectedMessage === "object"
+        ? selectedMessage?.id
+        : selectedMessage;
+
+    if (!selectedId || !updatedContent?.trim()) return;
+
+    setMessages((previous) =>
+      previous.map((msg) =>
+        msg.id === selectedId
+          ? { ...msg, content: updatedContent.trim(), edited: true }
+          : msg
+      )
+    );
+  };
+
+  // Delete
+  const handleDeleteMessage = (selectedMessage) => {
+    const selectedId =
+      typeof selectedMessage === "object"
+        ? selectedMessage?.id
+        : selectedMessage;
+
+    if (!selectedId) return;
+
+    if (!window.confirm("Are you sure you want to delete this message?")) {
+      return;
+    }
+
+    setMessages((previous) =>
+      previous.filter((msg) => msg.id !== selectedId)
+    );
+
+    setPinnedMessages((previousPins) => {
+      const updatedPins = previousPins.filter(
+        (msg) => msg.id !== selectedId
+      );
+
+      if (currentChat?.id) {
+        localStorage.setItem(
+          `chattingo-pinned-${currentChat.id}`,
+          JSON.stringify(updatedPins)
+        );
+      }
+
+      return updatedPins;
+    });
+  };
+
+  // Pin/unpin
+  const handlePinMessage = (selectedMessage) => {
+    const selectedId =
+      typeof selectedMessage === "object"
+        ? selectedMessage?.id
+        : selectedMessage;
+
+    if (!selectedId || !currentChat?.id) return;
+
+    const targetMessage = messages.find(
+      (msg) => msg.id === selectedId
+    );
+
+    if (!targetMessage) return;
+
+    setPinnedMessages((previousPins) => {
+      const alreadyPinned = previousPins.some(
+        (msg) => msg.id === selectedId
+      );
+
+      const updatedPins = alreadyPinned
+        ? previousPins.filter((msg) => msg.id !== selectedId)
+        : [...previousPins, targetMessage];
+
+      localStorage.setItem(
+        `chattingo-pinned-${currentChat.id}`,
+        JSON.stringify(updatedPins)
+      );
+
+      return updatedPins;
+    });
+
+    setMessages((previous) =>
+      previous.map((msg) =>
+        msg.id === selectedId
+          ? { ...msg, isPinned: !msg.isPinned }
+          : msg
+      )
+    );
+  };
+
+  const handleUnpinMessage = (selectedMessage) => {
+    handlePinMessage(selectedMessage);
+  };
+
+  // Reactions
+  const handleReactMessage = (selectedMessage, emoji) => {
+    const selectedId =
+      typeof selectedMessage === "object"
+        ? selectedMessage?.id
+        : selectedMessage;
+
+    if (!selectedId || !emoji) return;
+
+    setMessages((previous) =>
+      previous.map((msg) => {
+        if (msg.id !== selectedId) return msg;
+
+        const reactions = Array.isArray(msg.reactions)
+          ? [...msg.reactions]
+          : [];
+
+        const reactionIndex = reactions.findIndex(
+          (reaction) => reaction.emoji === emoji
+        );
+
+        if (reactionIndex >= 0) {
+          const reaction = reactions[reactionIndex];
+
+          if (reaction.reactedByMe) {
+            if (reaction.count <= 1) {
+              reactions.splice(reactionIndex, 1);
+            } else {
+              reactions[reactionIndex] = {
+                ...reaction,
+                count: reaction.count - 1,
+                reactedByMe: false,
+              };
+            }
+          } else {
+            reactions[reactionIndex] = {
+              ...reaction,
+              count: (reaction.count || 0) + 1,
+              reactedByMe: true,
+            };
+          }
+        } else {
+          reactions.push({
+            emoji,
+            count: 1,
+            reactedByMe: true,
+          });
+        }
+
+        return { ...msg, reactions };
+      })
+    );
+  };
+
+  // Search toggle
+  const handleToggleMessageSearch = () => {
+    setShowMessageSearch((previous) => !previous);
+  };
+
+  // Scroll to message
+  const handleScrollToMessage = (selectedMessage) => {
+    const selectedId =
+      typeof selectedMessage === "object"
+        ? selectedMessage?.id
+        : selectedMessage;
+
+    if (!selectedId || !messageContainerRef.current) return;
+
+    const elements =
+      messageContainerRef.current.querySelectorAll("[data-message-id]");
+
+    const target = Array.from(elements).find(
+      (element) =>
+        element.getAttribute("data-message-id") === String(selectedId)
+    );
+
+    target?.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+    });
+  };
+
+  // Profile
   const handleNavigate = () => {
     setIsProfile(true);
     setIsGroup(false);
     setAnchorEl(null);
   };
 
-  // Close profile
-  const handleCloseOpenProfile = () => {
-    setIsProfile(false);
-  };
+  const handleCloseOpenProfile = () => setIsProfile(false);
 
-  // Open group creation
+  // Create group
   const handleCreateGroup = () => {
     setIsGroup(true);
     setIsProfile(false);
     setAnchorEl(null);
   };
 
-  // Back to chat list on mobile
+  // Back
   const handleBackToChats = () => {
     setCurrentChat(null);
-    setShowEmojiPicker(false);
+    setReplyTo(null);
+    setShowMessageSearch(false);
+    setSelectedFile(null);
+    setShowAttachmentMenu(false);
+    setShowVoiceRecorder(false);
   };
 
   // Logout
@@ -323,18 +644,17 @@ function HomePage() {
     }
 
     setIsConnected(false);
+    setStompClient(null);
     dispatch(logoutAction());
     navigate("/signin");
   };
 
-  // Authentication check
+  // Authentication
   useEffect(() => {
-    if (!token) {
-      navigate("/signin");
-    }
+    if (!token) navigate("/signin");
   }, [token, navigate]);
 
-  // Get chat participant
+  // Chat participant
   const otherUser = currentChat?.users?.find(
     (user) => user?.id !== auth?.reqUser?.id
   );
@@ -347,26 +667,19 @@ function HomePage() {
     ? currentChat?.chat_image
     : otherUser?.profile;
 
-  const defaultAvatar =
-    "https://ui-avatars.com/api/?name=User&background=128C7E&color=fff";
-
   return (
     <div className="chattingo-page">
       <div className="chattingo-top-bar"></div>
 
       <div className="chattingo-container">
-
         {/* LEFT SIDEBAR */}
         <aside
-          className={`chattingo-sidebar ${
-            currentChat?.id ? "mobile-hide-sidebar" : ""
-          }`}
+          className={`chattingo-sidebar ${currentChat?.id ? "mobile-hide-sidebar" : ""
+            }`}
         >
           {isProfile && (
             <div className="h-full w-full">
-              <Profile
-                handleCloseOpenProfile={handleCloseOpenProfile}
-              />
+              <Profile handleCloseOpenProfile={handleCloseOpenProfile} />
             </div>
           )}
 
@@ -413,9 +726,8 @@ function HomePage() {
 
         {/* RIGHT CONTENT */}
         <main
-          className={`chattingo-main ${
-            currentChat?.id ? "mobile-show-chat" : ""
-          }`}
+          className={`chattingo-main ${currentChat?.id ? "mobile-show-chat" : ""
+            }`}
         >
           {!currentChat?.id ? (
             <div className="chattingo-welcome">
@@ -439,8 +751,7 @@ function HomePage() {
             </div>
           ) : (
             <section className="chattingo-conversation">
-
-              {/* CHAT HEADER */}
+              {/* HEADER */}
               <header className="chattingo-chat-header">
                 <button
                   type="button"
@@ -462,20 +773,27 @@ function HomePage() {
 
                 <div className="chattingo-header-info">
                   <h3>{chatName}</h3>
-                  <p>
-                    {currentChat?.group
-                      ? `${currentChat?.users?.length || 0} members`
-                      : isConnected
-                        ? "Online connection"
-                        : "Connecting..."}
-                  </p>
+
+                  {currentChat?.group ? (
+                    <p>{currentChat?.users?.length || 0} members</p>
+                  ) : (
+                    <p className="chattingo-presence-info">
+                      <PresenceBadge online={otherUserOnline} />
+                      <LastSeen
+                        online={otherUserOnline}
+                        lastSeen={otherUserLastSeen}
+                      />
+                    </p>
+                  )}
                 </div>
 
                 <div className="chattingo-header-actions">
                   <button
                     type="button"
                     title="Search messages"
-                    className="chattingo-icon-button"
+                    className={`chattingo-icon-button ${showMessageSearch ? "active" : ""
+                      }`}
+                    onClick={handleToggleMessageSearch}
                   >
                     <AiOutlineSearch />
                   </button>
@@ -490,7 +808,23 @@ function HomePage() {
                 </div>
               </header>
 
-              {/* MESSAGE AREA */}
+              {/* SEARCH */}
+              {showMessageSearch && (
+                <MessageSearch
+                  messages={messages}
+                  onMessageClick={handleScrollToMessage}
+                  onClose={() => setShowMessageSearch(false)}
+                />
+              )}
+
+              {/* PINS */}
+              <PinnedMessages
+                messages={pinnedMessages}
+                onUnpin={handleUnpinMessage}
+                onMessageClick={handleScrollToMessage}
+              />
+
+              {/* MESSAGES */}
               <div
                 className="chattingo-messages"
                 ref={messageContainerRef}
@@ -500,14 +834,27 @@ function HomePage() {
                     messages.map((item, index) => (
                       <MessageCard
                         key={item.id || index}
+                        message={item}
+                        messageId={item.id}
                         isReqUserMessage={
                           item?.user?.id !== auth?.reqUser?.id
                         }
                         content={item.content}
                         timestamp={item.timestamp}
-                        profilePic={
-                          item?.user?.profile || defaultAvatar
+                        profilePic={item?.user?.profile || defaultAvatar}
+                        replyTo={item.replyTo || item.repliedMessage}
+                        reactions={item.reactions || []}
+                        status={item.status}
+                        edited={item.edited}
+                        isPinned={
+                          item.isPinned ||
+                          pinnedMessages.some((pin) => pin.id === item.id)
                         }
+                        onReply={handleReplyMessage}
+                        onEdit={handleEditMessage}
+                        onDelete={handleDeleteMessage}
+                        onPin={handlePinMessage}
+                        onReact={handleReactMessage}
                       />
                     ))
                   ) : (
@@ -517,58 +864,64 @@ function HomePage() {
                       <p>Send a message to start the conversation.</p>
                     </div>
                   )}
+
+                  <TypingIndicator
+                    users={typingUsers}
+                    isTyping={typingUsers.length > 0}
+                  />
                 </div>
               </div>
 
-              {/* MESSAGE COMPOSER */}
-              <footer className="chattingo-composer">
-
-                {showEmojiPicker && (
-                  <div className="chattingo-emoji-picker">
-                    <EmojiPicker
-                      onEmojiClick={handleEmojiClick}
-                      width="100%"
-                      height={350}
-                      lazyLoadEmojis={true}
-                    />
-                  </div>
+              {/* COMPOSER AREA */}
+              <footer className="chattingo-composer chattingo-composer-wrapper">
+                {replyTo && (
+                  <ReplyPreview
+                    message={replyTo}
+                    onCancel={handleCancelReply}
+                  />
                 )}
 
-                <button
-                  type="button"
-                  className="chattingo-composer-icon"
-                  title="Choose emoji"
-                  onClick={() =>
-                    setShowEmojiPicker((previous) => !previous)
-                  }
-                >
-                  <BsEmojiSmile />
-                </button>
+                {/* Attachment selection panel */}
+                {showAttachmentMenu && (
+                  <AttachmentMenu
+                    onFileSelect={handleFileSelect}
+                    onClose={() => setShowAttachmentMenu(false)}
+                  />
+                )}
 
-                <textarea
-                  className="chattingo-message-input"
-                  placeholder="Type a message..."
-                  value={content}
-                  rows={1}
-                  onChange={(event) => setContent(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" && !event.shiftKey) {
-                      event.preventDefault();
-                      handleCreateNewMessage();
+                {/* File preview before sending */}
+                {selectedFile && (
+                  <FilePreview
+                    file={selectedFile}
+                    onRemove={() => setSelectedFile(null)}
+                    onSend={handleSendAttachment}
+                  />
+                )}
+
+                {/* Voice recorder */}
+                {showVoiceRecorder ? (
+                  <VoiceRecorder
+                    onRecordingComplete={handleVoiceRecordingComplete}
+                    onCancel={() => setShowVoiceRecorder(false)}
+                  />
+                ) : (
+                  <MessageComposer
+                    value={content}
+                    onChange={setContent}
+                    onSend={handleCreateNewMessage}
+                    onAttachment={() =>
+                      setShowAttachmentMenu((previous) => !previous)
                     }
-                  }}
-                />
-
-                <button
-                  type="button"
-                  className="chattingo-send-button"
-                  title="Send message"
-                  onClick={handleCreateNewMessage}
-                  disabled={!content.trim()}
-                >
-                  <BsSendFill />
-                </button>
-
+                    onVoice={handleStartVoice}
+                    onTyping={() => {
+                      // Typing event will be connected to backend WebSocket later.
+                    }}
+                    disabled={!currentChat?.id}
+                    placeholder={
+                      replyTo ? "Reply to message..." : "Type a message..."
+                    }
+                  />
+                )}
               </footer>
             </section>
           )}

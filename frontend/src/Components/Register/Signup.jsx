@@ -66,7 +66,13 @@ const Signup = () => {
       setIsSubmitting(true);
       setErrorMessage("");
 
-      const response = await dispatch(register(inputData));
+      const signupData = {
+        name: `${inputData.firstName.trim()} ${inputData.lastName.trim()}`,
+        email: inputData.email.trim(),
+        password: inputData.password,
+      };
+
+      const response = await dispatch(register(signupData));
 
       if (response?.jwt) {
         setOpenSnackbar(true);

@@ -42,29 +42,6 @@ const ChatList = ({
     return otherUser?.profile || defaultAvatar;
   };
 
-  const formatTime = (timestamp) => {
-    if (!timestamp) return "";
-
-    const date = new Date(timestamp);
-
-    if (Number.isNaN(date.getTime())) return "";
-
-    const now = new Date();
-    const isToday = date.toDateString() === now.toDateString();
-
-    if (isToday) {
-      return date.toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-    }
-
-    return date.toLocaleDateString([], {
-      day: "2-digit",
-      month: "short",
-    });
-  };
-
   return (
     <div className="chattingo-chat-list bg-white overflow-y-auto h-full">
       {querys ? (
@@ -96,6 +73,7 @@ const ChatList = ({
             <p className="text-sm font-medium text-gray-600">
               No users found
             </p>
+
             <p className="mt-1 text-xs text-gray-400">
               Try searching with another name
             </p>
@@ -134,6 +112,7 @@ const ChatList = ({
           <p className="text-sm font-medium text-gray-600">
             No chats available
           </p>
+
           <p className="mt-1 text-xs text-gray-400">
             Search for a user to start chatting
           </p>
