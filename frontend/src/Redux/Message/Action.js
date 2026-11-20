@@ -104,3 +104,23 @@ export const getAllMessages = (reqData) => async (dispatch) => {
     return [];
   }
 };
+// Delete message from backend
+export const deleteMessage = (messageId, token) => async () => {
+  try {
+    const res = await fetch(`${BASE_API_URL}/api/messages/${messageId}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!res.ok) {
+      throw new Error("Failed to delete message");
+    }
+
+    return true;
+  } catch (error) {
+    console.error("Delete message error:", error);
+    return false;
+  }
+};

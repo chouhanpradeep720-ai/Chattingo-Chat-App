@@ -49,11 +49,11 @@ const NewGroup = ({ groupMember, setIsGroup, onBack }) => {
     const data = new FormData();
     data.append("file", file);
     data.append("upload_preset", "chattingo");
-    data.append("cloud_name", "dadlxgune");
+    data.append("cloud_name", "qo98nfeq");
 
     try {
       const response = await fetch(
-        "https://api.cloudinary.com/v1_1/dadlxgune/image/upload",
+        "https://api.cloudinary.com/v1_1/qo98nfeq/image/upload",
         {
           method: "POST",
           body: data,

@@ -70,7 +70,7 @@ const Profile = ({ handleCloseOpenProfile }) => {
       formData.append("upload_preset", "chattingo");
 
       const response = await fetch(
-        "https://api.cloudinary.com/v1_1/dadlxgune/image/upload",
+        "https://api.cloudinary.com/v1_1/qo98nfeq/image/upload",
         {
           method: "POST",
           body: formData,
@@ -184,7 +184,7 @@ const Profile = ({ handleCloseOpenProfile }) => {
             </button>
           </div>
         ) : (
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col gap-3">
             <input
               type="text"
               value={username}
@@ -192,16 +192,15 @@ const Profile = ({ handleCloseOpenProfile }) => {
               onKeyDown={handleUpdateName}
               placeholder="Enter your name"
               autoFocus
-              className="min-w-0 flex-1 border-b-2 border-[#008069] bg-transparent px-2 py-2 text-sm text-gray-800 outline-none"
+              className="w-full border-b-2 border-[#008069] bg-transparent px-2 py-2 text-sm text-gray-800 outline-none"
             />
 
             <button
               type="button"
               onClick={handleSaveName}
-              title="Save name"
-              className="rounded-full p-2 text-xl text-[#008069] transition hover:bg-green-50"
+              className="w-full rounded-lg bg-[#008069] py-2.5 text-sm font-medium text-white transition hover:bg-[#006d5b]"
             >
-              <BsCheck2 />
+              Save
             </button>
           </div>
         )}

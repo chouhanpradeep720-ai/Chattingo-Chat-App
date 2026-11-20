@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { currentUser, logoutAction, searchUser } from "../Redux/Auth/Action";
 import { createChat, getUsersChat } from "../Redux/Chat/Action";
-import { createMessage, getAllMessages, uploadMedia } from "../Redux/Message/Action";
+import { createMessage, getAllMessages, uploadMedia, deleteMessage } from "../Redux/Message/Action";
 import SockJs from "sockjs-client/dist/sockjs";
 import { Client } from "@stomp/stompjs";
 
@@ -490,10 +490,10 @@ function HomePage() {
         ...savedMessage,
         replyTo: replyTo
           ? {
-              id: replyTo.id,
-              content: replyTo.content,
-              sender: replyTo.sender || replyTo.user,
-            }
+            id: replyTo.id,
+            content: replyTo.content,
+            sender: replyTo.sender || replyTo.user,
+          }
           : null,
       };
 
@@ -527,8 +527,8 @@ function HomePage() {
       const extension = mimeType.includes("ogg")
         ? "ogg"
         : mimeType.includes("mp4")
-        ? "m4a"
-        : "webm";
+          ? "m4a"
+          : "webm";
 
       const voiceFile = new File(
         [blob],
@@ -574,10 +574,10 @@ function HomePage() {
         voiceDuration: duration,
         replyTo: replyTo
           ? {
-              id: replyTo.id,
-              content: replyTo.content,
-              sender: replyTo.sender || replyTo.user,
-            }
+            id: replyTo.id,
+            content: replyTo.content,
+            sender: replyTo.sender || replyTo.user,
+          }
           : null,
       };
 
@@ -617,8 +617,8 @@ function HomePage() {
     );
   };
 
-  // Delete
-  const handleDeleteMessage = (selectedMessage) => {
+  // Delete message permanently from backend
+  const handleDeleteMessage = async (selectedMessage) => {
     const selectedId =
       typeof selectedMessage === "object"
         ? selectedMessage?.id
@@ -630,13 +630,21 @@ function HomePage() {
       return;
     }
 
+    const token = localStorage.getItem("token");
+    const deleted = await dispatch(deleteMessage(selectedId, token));
+
+    if (!deleted) {
+      alert("Failed to delete message. Please try again.");
+      return;
+    }
+
     setMessages((previous) =>
-      previous.filter((msg) => msg.id !== selectedId)
+      previous.filter((msg) => String(msg.id) !== String(selectedId))
     );
 
     setPinnedMessages((previousPins) => {
       const updatedPins = previousPins.filter(
-        (msg) => msg.id !== selectedId
+        (msg) => String(msg.id) !== String(selectedId)
       );
 
       if (currentChat?.id) {
