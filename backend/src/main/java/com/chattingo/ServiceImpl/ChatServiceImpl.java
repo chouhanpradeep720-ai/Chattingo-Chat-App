@@ -1,9 +1,11 @@
 package com.chattingo.ServiceImpl;
 
 import java.util.List;
+import java.util.Objects;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.chattingo.Exception.ChatException;
 import com.chattingo.Exception.UserException;
@@ -22,116 +24,252 @@ public class ChatServiceImpl implements ChatService {
     @Autowired
     private ChatRepository chatRepository;
 
+    // Helper: check membership by user ID
+    private boolean isMember(Chat chat, Integer userId) {
+        return chat.getUsers().stream()
+                .anyMatch(user -> Objects.equals(user.getId(), userId));
+    }
+
+    // Helper: check admin by user ID
+    private boolean isAdmin(Chat chat, Integer userId) {
+        return chat.getAdmins().stream()
+                .anyMatch(admin -> Objects.equals(admin.getId(), userId));
+    }
+
+    // Helper: count group admins
+    private long countAdmins(Chat chat) {
+        return chat.getAdmins().stream()
+                .map(User::getId)
+                .distinct()
+                .count();
+    }
+
+    // Create single chat or return existing chat
     @Override
+    @Transactional
     public Chat createChat(User reqUser, Integer userId) throws UserException {
 
-        User user = this.userService.findUserById(userId);
+        if (reqUser == null || userId == null || userId == reqUser.getId()) {
 
-        Chat isChatExist = this.chatRepository.findSingleChatByUserIds(user, reqUser);
+            throw new UserException("Invalid user ID for chat");
+        }
 
-        System.out.println(isChatExist);
-        if (isChatExist != null) {
-            return isChatExist;
+        User targetUser = userService.findUserById(userId);
+
+        Chat existingChat =
+                chatRepository.findSingleChatByUserIds(targetUser, reqUser);
+
+        if (existingChat != null) {
+            return existingChat;
         }
 
         Chat chat = new Chat();
+
         chat.setCreatedBy(reqUser);
-        chat.getUsers().add(user);
-        chat.getUsers().add(reqUser);
         chat.setGroup(false);
 
-        chat = this.chatRepository.save(chat);
+        chat.getUsers().add(reqUser);
+        chat.getUsers().add(targetUser);
 
-        return chat;
+        return chatRepository.save(chat);
     }
 
+    // Find chat by ID
     @Override
+    @Transactional(readOnly = true)
     public Chat findChatById(Integer chatId) throws ChatException {
-        return this.chatRepository.findById(chatId)
-                .orElseThrow(() -> new ChatException("The requested chat is not found"));
+
+        if (chatId == null) {
+            throw new ChatException("Chat ID cannot be null");
+        }
+
+        return chatRepository.findById(chatId)
+                .orElseThrow(() ->
+                        new ChatException("The requested chat was not found"));
     }
 
+    // Get all chats for a user
     @Override
+    @Transactional(readOnly = true)
     public List<Chat> findAllChatByUserId(Integer userId) throws UserException {
-        User user = this.userService.findUserById(userId);
 
-        List<Chat> chats = this.chatRepository.findChatByUserId(user.getId());
+        if (userId == null) {
+            throw new UserException("User ID cannot be null");
+        }
 
-        return chats;
+        User user = userService.findUserById(userId);
+
+        return chatRepository.findChatByUserId(user.getId());
     }
 
+    // Create group chat
     @Override
-    public Chat createGroup(GroupChatRequest req, User reqUser) throws UserException {
+    @Transactional
+    public Chat createGroup(GroupChatRequest req, User reqUser)
+            throws UserException {
+
+        if (req == null || reqUser == null) {
+            throw new UserException("Invalid group creation request");
+        }
+
+        if (req.getChatName() == null || req.getChatName().trim().isEmpty()) {
+            throw new IllegalArgumentException("Group name cannot be empty");
+        }
+
         Chat group = new Chat();
+
         group.setGroup(true);
+        group.setChatName(req.getChatName().trim());
         group.setChatImage(req.getChatImage());
-        group.setChatName(req.getChatName());
         group.setCreatedBy(reqUser);
+
+        // Creator is a member and admin
+        group.getUsers().add(reqUser);
         group.getAdmins().add(reqUser);
 
-        for (Integer userId : req.getUserIds()) {
-            User user = this.userService.findUserById(userId);
-            group.getUsers().add(user);
-        }
+        if (req.getUserIds() != null) {
 
-        group = this.chatRepository.save(group);
-        return group;
-    }
+            for (Integer userId : req.getUserIds()) {
 
-    @Override
-    public Chat addUserToGroup(Integer userId, Integer chatId, User reqUser) throws UserException, ChatException {
-        Chat chat = this.chatRepository.findById(chatId)
-                .orElseThrow(() -> new ChatException("The expected chat is not found"));
+                if (userId == null || userId.equals(reqUser.getId())) {
+                    continue;
+                }
 
-        User user = this.userService.findUserById(userId);
+                // Avoid duplicate members
+                if (isMember(group, userId)) {
+                    continue;
+                }
 
-        if (chat.getAdmins().contains((reqUser))) {
-            chat.getUsers().add(user);
-            return chat;
-        } else {
-            throw new UserException("You have not access to add user");
-        }
-    }
-
-    @Override
-    public Chat renameGroup(Integer chatId, String groupName, User reqUser) throws ChatException, UserException {
-        Chat chat = this.chatRepository.findById(chatId)
-                .orElseThrow(() -> new ChatException("The expected chat is not found"));
-
-        if (chat.getUsers().contains(reqUser)) {
-            chat.setChatName(groupName);
-            return this.chatRepository.save(chat);
-        } else {
-            throw new UserException("YOu are not the user");
-        }
-    }
-
-    @Override
-    public Chat removeFromGroup(Integer chatId, Integer userId, User reqUser) throws UserException, ChatException {
-        Chat chat = this.chatRepository.findById(chatId)
-                .orElseThrow(() -> new ChatException("The expected chat is not found"));
-
-        User user = this.userService.findUserById(userId);
-
-        if (chat.getAdmins().contains((reqUser))) {
-            chat.getUsers().remove(user);
-            return chat;
-        } else if (chat.getUsers().contains(reqUser)) {
-            if (user.getId() == reqUser.getId()) {
-                chat.getUsers().remove(user);
-                return this.chatRepository.save(chat);
+                User user = userService.findUserById(userId);
+                group.getUsers().add(user);
             }
-
         }
-        throw new UserException("You have not access to remove user");
 
+        return chatRepository.save(group);
     }
 
+    // Add user to group
     @Override
-    public void deleteChat(Integer chatId, Integer userId) throws ChatException, UserException {
-        Chat chat = this.chatRepository.findById(chatId)
-                .orElseThrow(() -> new ChatException("The expected chat is not found while deleteing"));
-        this.chatRepository.delete(chat);
+    @Transactional
+    public Chat addUserToGroup(Integer userId, Integer chatId, User reqUser)
+            throws UserException, ChatException {
+
+        if (userId == null || chatId == null || reqUser == null) {
+            throw new UserException("Invalid request");
+        }
+
+        Chat chat = chatRepository.findById(chatId)
+                .orElseThrow(() ->
+                        new ChatException("The requested chat was not found"));
+
+        if (!chat.isGroup()) {
+            throw new ChatException("Users can only be added to group chats");
+        }
+
+        if (!isAdmin(chat, reqUser.getId())) {
+            throw new UserException("Only group admins can add members");
+        }
+
+        User user = userService.findUserById(userId);
+
+        if (isMember(chat, userId)) {
+            return chat;
+        }
+
+        chat.getUsers().add(user);
+
+        return chatRepository.save(chat);
     }
 
+    // Rename group
+    @Override
+    @Transactional
+    public Chat renameGroup(Integer chatId, String groupName, User reqUser)
+            throws ChatException, UserException {
+
+        Chat chat = chatRepository.findById(chatId)
+                .orElseThrow(() ->
+                        new ChatException("The requested chat was not found"));
+
+        if (!chat.isGroup()) {
+            throw new ChatException("This chat is not a group");
+        }
+
+        if (reqUser == null || !isAdmin(chat, reqUser.getId())) {
+            throw new UserException("Only group admins can rename the group");
+        }
+
+        if (groupName == null || groupName.trim().isEmpty()) {
+            throw new IllegalArgumentException("Group name cannot be empty");
+        }
+
+        chat.setChatName(groupName.trim());
+
+        return chatRepository.save(chat);
+    }
+
+    // Remove member or leave group
+    @Override
+    @Transactional
+    public Chat removeFromGroup(Integer chatId, Integer userId, User reqUser)
+            throws UserException, ChatException {
+
+        if (chatId == null || userId == null || reqUser == null) {
+            throw new UserException("Invalid request");
+        }
+
+        Chat chat = chatRepository.findById(chatId)
+                .orElseThrow(() ->
+                        new ChatException("The requested chat was not found"));
+
+        if (!chat.isGroup()) {
+            throw new ChatException("This operation is only allowed for groups");
+        }
+
+        User targetUser = userService.findUserById(userId);
+
+        if (!isMember(chat, userId)) {
+            throw new UserException("User is not a member of this group");
+        }
+
+        boolean requesterIsAdmin = isAdmin(chat, reqUser.getId());
+        boolean requesterRemovingSelf = reqUser.getId() == userId;
+
+        // Only admins can remove other members
+        if (!requesterIsAdmin && !requesterRemovingSelf) {
+            throw new UserException("You do not have permission to remove this user");
+        }
+
+        // Prevent removing the last admin
+        if (isAdmin(chat, userId) && countAdmins(chat) <= 1) {
+            throw new UserException(
+                    "The last admin cannot leave or be removed");
+        }
+
+        chat.getUsers().remove(targetUser);
+        chat.getAdmins().remove(targetUser);
+
+        return chatRepository.save(chat);
+    }
+
+    // Delete chat
+    @Override
+    @Transactional
+    public void deleteChat(Integer chatId, Integer userId)
+            throws ChatException, UserException {
+
+        if (chatId == null || userId == null) {
+            throw new UserException("Invalid request");
+        }
+
+        Chat chat = chatRepository.findById(chatId)
+                .orElseThrow(() ->
+                        new ChatException("The requested chat was not found"));
+
+        if (!isMember(chat, userId)) {
+            throw new UserException("You are not a member of this chat");
+        }
+
+        chatRepository.delete(chat);
+    }
 }

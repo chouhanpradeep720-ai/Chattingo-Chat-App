@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import MessageActions from "../Message/MessageActions";
 import MessageReactions from "../Message/MessageReactions";
 import VoiceMessage from "../Media/VoiceMessage";
+import { BASE_API_URL } from "../../config/api";
 
 const MessageCard = ({
   isReqUserMessage,
@@ -116,72 +117,86 @@ const MessageCard = ({
     );
   };
 
+  // Resolve media URLs against the backend
+  const getMediaUrl = (url) => {
+    if (!url) return "";
+
+    if (/^https?:\/\//i.test(url)) {
+      return url;
+    }
+
+    return `${BASE_API_URL.replace(/\/$/, "")}/${url.replace(/^\//, "")}`;
+  };
+
   // Media rendering
   const renderMedia = () => {
     if (!message?.mediaUrl) return null;
 
-    if (message.isVoiceMessage || message.mediaType === "audio") {
-      return (
-        <div className="message-media-wrapper">
-          <VoiceMessage
-            src={message.mediaUrl}
-            duration={message.voiceDuration}
-            isOwnMessage={!isReqUserMessage}
-          />
-        </div>
-      );
-    }
+    const mediaUrl = getMediaUrl(message.mediaUrl);
+    const mediaType = (message.mediaType || "").toLowerCase();
+    const isVoice = message.voiceMessage || message.isVoiceMessage;
+    const fileName = message.fileName || "Shared file";
 
-    if (message.mediaType === "image") {
+    if (mediaType === "image") {
       return (
         <div className="message-media-wrapper">
-          <a
-            href={message.mediaUrl}
-            target="_blank"
-            rel="noreferrer"
-          >
+          <a href={mediaUrl} target="_blank" rel="noreferrer">
             <img
-              src={message.mediaUrl}
-              alt={message.fileName || "Shared image"}
+              src={mediaUrl}
+              alt={fileName}
               className="message-shared-image"
+              loading="lazy"
             />
           </a>
 
           {message.fileName && (
-            <p className="message-media-filename">
-              {message.fileName}
-            </p>
+            <p className="message-media-filename">{fileName}</p>
           )}
         </div>
       );
     }
 
-    if (message.mediaType === "video") {
+    if (mediaType === "video") {
       return (
         <div className="message-media-wrapper">
           <video
-            src={message.mediaUrl}
+            src={mediaUrl}
             controls
+            preload="metadata"
             className="message-shared-video"
           />
 
           {message.fileName && (
-            <p className="message-media-filename">
-              {message.fileName}
-            </p>
+            <p className="message-media-filename">{fileName}</p>
           )}
         </div>
       );
     }
 
-    // Document / generic file
+    if (mediaType === "audio" || isVoice) {
+      return (
+        <div className="message-media-wrapper">
+          <VoiceMessage
+            src={mediaUrl}
+            duration={message.voiceDuration}
+            isOwnMessage={!isReqUserMessage}
+          />
+
+          {!isVoice && message.fileName && (
+            <p className="message-media-filename">{fileName}</p>
+          )}
+        </div>
+      );
+    }
+
+    // Documents and other files
     return (
       <div className="message-shared-file">
         <div className="message-file-icon">📄</div>
 
         <div className="message-file-details">
           <p className="message-file-name">
-            {message.fileName || content || "File"}
+            {fileName}
           </p>
 
           <span className="message-file-size">
@@ -190,8 +205,10 @@ const MessageCard = ({
         </div>
 
         <a
-          href={message.mediaUrl}
-          download={message.fileName || "download"}
+          href={mediaUrl}
+          target="_blank"
+          rel="noreferrer"
+          download={fileName}
           className="message-file-download"
           title="Download file"
         >
@@ -307,8 +324,9 @@ const MessageCard = ({
 
               {/* Text */}
               {content &&
+                !message?.voiceMessage &&
                 !message?.isVoiceMessage &&
-                !message?.mediaType && (
+                !message?.mediaUrl && (
                   <p className="text-[14px] leading-[1.55] whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
                     {content}
                   </p>

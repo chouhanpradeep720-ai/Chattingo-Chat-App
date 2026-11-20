@@ -5,6 +5,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -21,20 +24,41 @@ public class Chat {
     private Integer id;
 
     private String chatName;
+
     private String chatImage;
+
     private boolean isGroup;
 
     @ManyToMany
+    @JsonIgnoreProperties({"chats", "password"})
     private Set<User> admins = new HashSet<>();
 
     @ManyToOne
+    @JsonIgnoreProperties({"chats", "password"})
     private User createdBy;
 
     @ManyToMany
+    @JsonIgnoreProperties({"chats", "password"})
     private Set<User> users = new HashSet<>();
 
-    @OneToMany
+    @OneToMany(mappedBy = "chat", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonIgnoreProperties({"chat", "user"})
     private List<Message> messages = new ArrayList<>();
+
+    public Chat() {
+    }
+
+    public Chat(Integer id, String chatName, String chatImage, boolean isGroup,
+                Set<User> admins, User createdBy, Set<User> users, List<Message> messages) {
+        this.id = id;
+        this.chatName = chatName;
+        this.chatImage = chatImage;
+        this.isGroup = isGroup;
+        this.admins = admins;
+        this.createdBy = createdBy;
+        this.users = users;
+        this.messages = messages;
+    }
 
     public Integer getId() {
         return id;
@@ -100,26 +124,13 @@ public class Chat {
         this.messages = messages;
     }
 
-    public Chat() {
-    }
-
-    public Chat(Integer id, String chatName, String chatImage, boolean isGroup, Set<User> admins, User createdBy,
-            Set<User> users, List<Message> messages) {
-        this.id = id;
-        this.chatName = chatName;
-        this.chatImage = chatImage;
-        this.isGroup = isGroup;
-        this.admins = admins;
-        this.createdBy = createdBy;
-        this.users = users;
-        this.messages = messages;
-    }
-
     @Override
     public String toString() {
-        return "Chat [id=" + id + ", chatName=" + chatName + ", chatImage=" + chatImage + ", isGroup=" + isGroup
-                + ", admins=" + admins + ", createdBy=" + createdBy + ", users=" + users + ", messages=" + messages
-                + "]";
+        return "Chat{" +
+                "id=" + id +
+                ", chatName='" + chatName + '\'' +
+                ", chatImage='" + chatImage + '\'' +
+                ", isGroup=" + isGroup +
+                '}';
     }
-
 }

@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { currentUser, logoutAction, searchUser } from "../Redux/Auth/Action";
 import { createChat, getUsersChat } from "../Redux/Chat/Action";
-import { createMessage, getAllMessages } from "../Redux/Message/Action";
+import { createMessage, getAllMessages, uploadMedia } from "../Redux/Message/Action";
 import SockJs from "sockjs-client/dist/sockjs";
 import { Client } from "@stomp/stompjs";
 
@@ -76,7 +76,9 @@ function HomePage() {
 
   const messageContainerRef = useRef(null);
   const stompClientRef = useRef(null);
-
+  const currentChatRef = useRef(currentChat);
+  currentChatRef.current = currentChat;
+  const creatingChatRef = useRef(false);
   const defaultAvatar =
     "https://ui-avatars.com/api/?name=User&background=128C7E&color=fff";
 
@@ -149,13 +151,38 @@ function HomePage() {
       const receivedMessage = JSON.parse(payload.body);
 
       setMessages((previousMessages) => {
-        const alreadyExists = previousMessages.some(
-          (msg) => msg.id === receivedMessage.id
+        const activeChatId = currentChatRef.current?.id;
+        const receivedChatId = receivedMessage.chat?.id;
+
+        // Ignore messages not belonging to the currently open chat
+        if (
+          !activeChatId ||
+          !receivedChatId ||
+          String(activeChatId) !== String(receivedChatId)
+        ) {
+          return previousMessages;
+        }
+
+        // Only deduplicate messages that have a valid ID
+        const alreadyExists = receivedMessage.id != null &&
+          previousMessages.some(
+            (msg) =>
+              msg.id != null &&
+              String(msg.id) === String(receivedMessage.id)
+          );
+
+        if (alreadyExists) {
+          return previousMessages.map((msg) =>
+            String(msg.id) === String(receivedMessage.id)
+              ? { ...msg, ...receivedMessage }
+              : msg
+          );
+        }
+
+        return [...previousMessages, receivedMessage].sort(
+          (a, b) =>
+            new Date(a.timestamp || 0) - new Date(b.timestamp || 0)
         );
-
-        if (alreadyExists) return previousMessages;
-
-        return [...previousMessages, receivedMessage];
       });
 
       if (receivedMessage.chat?.id) {
@@ -211,14 +238,40 @@ function HomePage() {
   }, [currentChat?.id, token, dispatch]);
 
   // Sync messages from Redux
+  // Sync Redux messages without losing local messages
   useEffect(() => {
     if (!Array.isArray(message.messages) || !currentChat?.id) return;
 
-    const currentChatMessages = message.messages.filter(
-      (msg) => msg.chat?.id === currentChat.id
+    const chatId = currentChat.id;
+
+    const serverMessages = message.messages.filter(
+      (msg) => String(msg.chat?.id) === String(chatId)
     );
 
-    setMessages(currentChatMessages);
+    setMessages((previousMessages) => {
+      const localMessages = previousMessages.filter(
+        (msg) =>
+          String(msg.chat?.id) === String(chatId) &&
+          msg.localOnly
+      );
+
+      const mergedMessages = [...serverMessages];
+
+      localMessages.forEach((localMessage) => {
+        const alreadyExists = mergedMessages.some(
+          (msg) => String(msg.id) === String(localMessage.id)
+        );
+
+        if (!alreadyExists) {
+          mergedMessages.push(localMessage);
+        }
+      });
+
+      return mergedMessages.sort(
+        (a, b) =>
+          new Date(a.timestamp || 0) - new Date(b.timestamp || 0)
+      );
+    });
   }, [message.messages, currentChat?.id]);
 
   // Load pinned messages
@@ -292,15 +345,32 @@ function HomePage() {
   };
 
   // Create chat
-  const handleClickOnChatCard = (userId) => {
-    if (!userId) return;
+  // Create or open single chat
+  const handleClickOnChatCard = async (userId) => {
+    if (!userId || creatingChatRef.current) return;
 
-    dispatch(
-      createChat({
-        token,
-        data: { userId },
-      })
-    );
+    creatingChatRef.current = true;
+
+    try {
+      const createdChat = await dispatch(
+        createChat({
+          token,
+          data: { userId },
+        })
+      );
+
+      if (createdChat?.id) {
+        setCurrentChat(createdChat);
+        setQuerys("");
+        setReplyTo(null);
+        setShowMessageSearch(false);
+        setShowAttachmentMenu(false);
+        setSelectedFile(null);
+        setShowVoiceRecorder(false);
+      }
+    } finally {
+      creatingChatRef.current = false;
+    }
   };
 
   // Send normal text message
@@ -323,6 +393,44 @@ function HomePage() {
     setReplyTo(null);
   };
 
+  // Add successfully created server message to UI without duplicates
+  const addServerMessageToState = (savedMessage) => {
+    if (!savedMessage?.id) return;
+
+    setMessages((previousMessages) => {
+      const exists = previousMessages.some(
+        (msg) => String(msg.id) === String(savedMessage.id)
+      );
+
+      if (exists) {
+        return previousMessages.map((msg) =>
+          String(msg.id) === String(savedMessage.id)
+            ? { ...msg, ...savedMessage }
+            : msg
+        );
+      }
+
+      if (
+        String(savedMessage.chat?.id) !==
+        String(currentChatRef.current?.id)
+      ) {
+        return previousMessages;
+      }
+
+      return [...previousMessages, savedMessage].sort(
+        (a, b) =>
+          new Date(a.timestamp || 0) - new Date(b.timestamp || 0)
+      );
+    });
+
+    if (savedMessage.chat?.id) {
+      setLastMessages((previous) => ({
+        ...previous,
+        [savedMessage.chat.id]: savedMessage,
+      }));
+    }
+  };
+
   // Select attachment
   const handleFileSelect = (file) => {
     if (!file) return;
@@ -331,11 +439,11 @@ function HomePage() {
     setShowAttachmentMenu(false);
   };
 
-  // Send attachment (local frontend preview/demo)
-  const handleSendAttachment = (file) => {
+  // Upload attachment and create persistent message
+  const handleSendAttachment = async (file) => {
     if (!file || !currentChat?.id) return;
 
-    const mediaUrl = URL.createObjectURL(file);
+    const chatId = currentChat.id;
 
     let mediaType = "document";
 
@@ -347,35 +455,56 @@ function HomePage() {
       mediaType = "audio";
     }
 
-    const localMessage = {
-      id: `local-${Date.now()}`,
-      content: file.name,
-      timestamp: new Date().toISOString(),
-      chat: currentChat,
-      user: auth?.reqUser,
-      mediaUrl,
-      mediaType,
-      fileName: file.name,
-      fileSize: file.size,
-      replyTo: replyTo
-        ? {
-          id: replyTo.id,
-          content: replyTo.content,
-          sender: replyTo.sender || replyTo.user,
-        }
-        : null,
-      localOnly: true,
-    };
+    try {
+      // Upload file to backend
+      const uploadResult = await uploadMedia(file, token);
 
-    setMessages((previous) => [...previous, localMessage]);
+      if (!uploadResult?.fileUrl) {
+        alert("File upload failed. Please try again.");
+        return;
+      }
 
-    setLastMessages((previous) => ({
-      ...previous,
-      [currentChat.id]: localMessage,
-    }));
+      // Save message metadata in database
+      const savedMessage = await dispatch(
+        createMessage({
+          token,
+          data: {
+            chatId,
+            content: file.name,
+            mediaUrl: uploadResult.fileUrl,
+            mediaType,
+            fileName: file.name,
+            fileSize: file.size,
+            voiceMessage: false,
+          },
+        })
+      );
 
-    setSelectedFile(null);
-    setReplyTo(null);
+      if (!savedMessage) {
+        alert("File uploaded, but message could not be saved.");
+        return;
+      }
+
+      // Preserve reply context locally (reply persistence is not implemented yet)
+      const messageWithReply = {
+        ...savedMessage,
+        replyTo: replyTo
+          ? {
+              id: replyTo.id,
+              content: replyTo.content,
+              sender: replyTo.sender || replyTo.user,
+            }
+          : null,
+      };
+
+      addServerMessageToState(messageWithReply);
+
+      setSelectedFile(null);
+      setReplyTo(null);
+    } catch (error) {
+      console.error("Attachment sending error:", error);
+      alert(error.message || "Unable to send attachment.");
+    }
   };
 
   // Start voice recorder
@@ -384,45 +513,83 @@ function HomePage() {
     setShowAttachmentMenu(false);
   };
 
-  // Save voice message locally (backend upload pending)
-  const handleVoiceRecordingComplete = (blob, duration) => {
+  // Upload voice recording and create persistent voice message
+  const handleVoiceRecordingComplete = async (blob, duration) => {
     if (!blob || !currentChat?.id) {
       setShowVoiceRecorder(false);
       return;
     }
 
-    const voiceUrl = URL.createObjectURL(blob);
+    const chatId = currentChat.id;
 
-    const localMessage = {
-      id: `local-voice-${Date.now()}`,
-      content: "Voice message",
-      timestamp: new Date().toISOString(),
-      chat: currentChat,
-      user: auth?.reqUser,
-      mediaUrl: voiceUrl,
-      mediaType: "audio",
-      isVoiceMessage: true,
-      voiceDuration: duration,
-      fileName: "voice-message.webm",
-      replyTo: replyTo
-        ? {
-          id: replyTo.id,
-          content: replyTo.content,
-          sender: replyTo.sender || replyTo.user,
-        }
-        : null,
-      localOnly: true,
-    };
+    try {
+      const mimeType = blob.type || "audio/webm";
+      const extension = mimeType.includes("ogg")
+        ? "ogg"
+        : mimeType.includes("mp4")
+        ? "m4a"
+        : "webm";
 
-    setMessages((previous) => [...previous, localMessage]);
+      const voiceFile = new File(
+        [blob],
+        `voice-message-${Date.now()}.${extension}`,
+        { type: mimeType }
+      );
 
-    setLastMessages((previous) => ({
-      ...previous,
-      [currentChat.id]: localMessage,
-    }));
+      // Upload voice recording
+      const uploadResult = await uploadMedia(voiceFile, token);
 
-    setReplyTo(null);
-    setShowVoiceRecorder(false);
+      if (!uploadResult?.fileUrl) {
+        alert("Voice upload failed. Please try again.");
+        setShowVoiceRecorder(false);
+        return;
+      }
+
+      // Save voice message in database
+      const savedMessage = await dispatch(
+        createMessage({
+          token,
+          data: {
+            chatId,
+            content: "Voice message",
+            mediaUrl: uploadResult.fileUrl,
+            mediaType: "audio",
+            fileName: voiceFile.name,
+            fileSize: voiceFile.size,
+            voiceMessage: true,
+            voiceDuration: duration,
+          },
+        })
+      );
+
+      if (!savedMessage) {
+        alert("Voice uploaded, but message could not be saved.");
+        setShowVoiceRecorder(false);
+        return;
+      }
+
+      const messageWithVoiceMetadata = {
+        ...savedMessage,
+        isVoiceMessage: true,
+        voiceDuration: duration,
+        replyTo: replyTo
+          ? {
+              id: replyTo.id,
+              content: replyTo.content,
+              sender: replyTo.sender || replyTo.user,
+            }
+          : null,
+      };
+
+      addServerMessageToState(messageWithVoiceMetadata);
+
+      setReplyTo(null);
+      setShowVoiceRecorder(false);
+    } catch (error) {
+      console.error("Voice message sending error:", error);
+      alert(error.message || "Unable to send voice message.");
+      setShowVoiceRecorder(false);
+    }
   };
 
   // Reply

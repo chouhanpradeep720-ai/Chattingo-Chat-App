@@ -13,11 +13,26 @@ export const messageReducer = (store = initialValue, { type, payload }) => {
         messages: Array.isArray(payload) ? payload : [],
       };
 
-    case CREATE_NEW_MESSAGE:
+    case CREATE_NEW_MESSAGE: {
+      const alreadyExists = payload?.id != null &&
+        store.messages.some(
+          (message) =>
+            message.id != null &&
+            String(message.id) === String(payload.id)
+        );
+
       return {
         ...store,
+        messages: alreadyExists
+          ? store.messages.map((message) =>
+              String(message.id) === String(payload?.id)
+                ? { ...message, ...payload }
+                : message
+            )
+          : [...store.messages, payload],
         newMessage: payload,
       };
+    }
 
     default:
       return store;

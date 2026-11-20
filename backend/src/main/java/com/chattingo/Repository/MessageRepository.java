@@ -10,6 +10,11 @@ import com.chattingo.Model.Message;
 
 public interface MessageRepository extends JpaRepository<Message, Integer> {
 
-    @Query("select m from Message m join m.chat c where c.id=:chatId")
-    public List<Message> findByChatId(@Param("chatId") Integer chatId);
+    // Fetch chat messages in chronological order
+    @Query("""
+            SELECT m FROM Message m
+            WHERE m.chat.id = :chatId
+            ORDER BY m.timestamp ASC
+            """)
+    List<Message> findByChatId(@Param("chatId") Integer chatId);
 }

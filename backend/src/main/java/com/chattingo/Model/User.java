@@ -23,6 +23,17 @@ public class User {
     @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String password;
 
+    public User() {
+    }
+
+    public User(int id, String name, String email, String profile, String password) {
+        this.id = id;
+        this.name = name;
+        this.email = email;
+        this.profile = profile;
+        this.password = password;
+    }
+
     public int getId() {
         return id;
     }
@@ -63,23 +74,14 @@ public class User {
         this.password = password;
     }
 
-    public User() {
-    }
-
-    public User(int id, String name, String email, String profile, String password) {
-        this.id = id;
-        this.name = name;
-        this.email = email;
-        this.profile = profile;
-        this.password = password;
-    }
-
     @Override
     public String toString() {
-        return "User [id=" + id
-                + ", name=" + name
-                + ", email=" + email
-                + ", profile=" + profile
-                + ", password=PROTECTED]";
+        return "User{" +
+                "id=" + id +
+                ", name='" + name + '\'' +
+                ", email='" + email + '\'' +
+                ", profile='" + profile + '\'' +
+                ", password='PROTECTED'" +
+                '}';
     }
 }

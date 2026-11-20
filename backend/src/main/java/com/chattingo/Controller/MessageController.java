@@ -34,41 +34,49 @@ public class MessageController {
     @Autowired
     private UserServiceImpl userService;
 
+    // Send message
     @PostMapping("/create")
-    public ResponseEntity<Message> sendMessageHandler(@RequestBody SendMessageRequest sendMessageRequest,
-            @RequestHeader("Authorization") String jwt) throws UserException, ChatException {
+    public ResponseEntity<Message> sendMessageHandler(
+            @RequestBody SendMessageRequest request,
+            @RequestHeader("Authorization") String jwt)
+            throws UserException, ChatException {
 
-        User user = this.userService.findUserProfile(jwt);
+        User user = userService.findUserProfile(jwt);
 
-        sendMessageRequest.setUserId(user.getId());
+        request.setUserId(user.getId());
 
-        Message message = this.messageService.sendMessage(sendMessageRequest);
+        Message message = messageService.sendMessage(request);
 
-        return new ResponseEntity<Message>(message, HttpStatus.OK);
+        return ResponseEntity.status(HttpStatus.CREATED).body(message);
     }
 
+    // Get all messages of a chat
     @GetMapping("/{chatId}")
-    public ResponseEntity<List<Message>> getChatMessageHandler(@PathVariable Integer chatId,
-            @RequestHeader("Authorization") String jwt) throws UserException, ChatException {
+    public ResponseEntity<List<Message>> getChatMessageHandler(
+            @PathVariable Integer chatId,
+            @RequestHeader("Authorization") String jwt)
+            throws UserException, ChatException {
 
-        User user = this.userService.findUserProfile(jwt);
+        User user = userService.findUserProfile(jwt);
 
-        List<Message> messages = this.messageService.getChatsMessages(chatId, user);
+        List<Message> messages = messageService.getChatsMessages(chatId, user);
 
-        return new ResponseEntity<List<Message>>(messages, HttpStatus.OK);
+        return ResponseEntity.ok(messages);
     }
 
+    // Delete message
     @DeleteMapping("/{messageId}")
-    public ResponseEntity<ApiResponse> deleteMessageHandler(@PathVariable Integer messageId,
-            @RequestHeader("Authorization") String jwt) throws UserException, ChatException, MessageException {
+    public ResponseEntity<ApiResponse> deleteMessageHandler(
+            @PathVariable Integer messageId,
+            @RequestHeader("Authorization") String jwt)
+            throws UserException, MessageException {
 
-        User user = this.userService.findUserProfile(jwt);
+        User user = userService.findUserProfile(jwt);
 
-        this.messageService.deleteMessage(messageId, user);
+        messageService.deleteMessage(messageId, user);
 
-        ApiResponse res = new ApiResponse("Deleted successfully......", false);
+        ApiResponse response = new ApiResponse("Message deleted successfully", false);
 
-        return new ResponseEntity<>(res, HttpStatus.OK);
+        return ResponseEntity.ok(response);
     }
-
 }

@@ -9,8 +9,13 @@ const VoiceMessage = ({
   if (!src) return null;
 
   const formatDuration = (seconds) => {
-    const minutes = Math.floor(seconds / 60);
-    const remaining = seconds % 60;
+    if (seconds === undefined || seconds === null || Number.isNaN(Number(seconds))) {
+      return "";
+    }
+
+    const totalSeconds = Math.max(0, Math.floor(Number(seconds)));
+    const minutes = Math.floor(totalSeconds / 60);
+    const remaining = totalSeconds % 60;
 
     return `${minutes}:${String(remaining).padStart(2, "0")}`;
   };

@@ -1,6 +1,36 @@
 import { BASE_API_URL } from "../../config/api";
 import { CREATE_NEW_MESSAGE, GET_ALL_MESSAGE } from "./ActionType.js";
 
+// Upload media file
+export const uploadMedia = async (file, token) => {
+  try {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const res = await fetch(`${BASE_API_URL}/api/media/upload`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || "Failed to upload file");
+    }
+
+    const data = await res.json();
+
+    console.log("Media uploaded successfully:", data);
+
+    return data;
+  } catch (error) {
+    console.error("Media upload error:", error);
+    return null;
+  }
+};
+
 // Create a new message
 export const createMessage = (messageData) => async (dispatch) => {
   try {
